@@ -1,0 +1,176 @@
+.apartments-page {
+  animation: fadeIn 0.3s ease-out;
+}
+
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 2rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid #e9ecef;
+}
+
+.filters-container {
+  background-color: #f8f9fa;
+  padding: 1.5rem;
+  border-radius: 0.5rem;
+  margin-bottom: 2rem;
+  box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+}
+
+.table {
+  box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+  border-radius: 0.5rem;
+  overflow: hidden;
+}
+
+.table th {
+  background-color: #f8f9fa;
+  border-top: none;
+  font-weight: 600;
+}
+
+.table tbody tr {
+  transition: all 0.2s ease;
+}
+
+.table tbody tr:hover {
+  background-color: #f1f5f9;
+  transform: translateY(-2px);
+  box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.05);
+}
+
+/* Modal styles */
+.modal.show {
+  display: block;
+  background-color: rgba(0, 0, 0, 0.5);
+}
+
+.modal-backdrop {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: transparent;
+  z-index: -1;
+}
+
+/* Animation */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .page-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  
+  .page-header button {
+    margin-top: 1rem;
+    align-self: flex-end;
+  }
+}
+
+.coming-soon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 400px;
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.coming-soon-content {
+  text-align: center;
+  padding: 3rem;
+}
+
+.coming-soon-content h2 {
+  margin: 1rem 0;
+  color: #212529;
+  font-weight: 600;
+}
+
+.coming-soon-content p {
+  color: #6c757d;
+  font-size: 1.1rem;
+  margin: 0;
+}
+
+.apartments-container {
+  padding: 1rem;
+}
+
+.apartment-details label {
+  margin-bottom: 0.25rem;
+}
+
+.apartment-details p {
+  margin-bottom: 1rem;
+}
+
+.table th, 
+.table td {
+  padding: 0.75rem;
+  vertical-align: middle;
+}
+
+.badge {
+  font-size: 0.75rem;
+  padding: 0.35em 0.65em;
+}
+
+.btn-group-sm > .btn {
+  padding: 0.25rem 0.5rem;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .table-responsive {
+    border: 0;
+  }
+  
+  .table thead {
+    display: none;
+  }
+  
+  .table tr {
+    margin-bottom: 1rem;
+    display: block;
+    border-bottom: 2px solid #e9ecef;
+  }
+  
+  .table td {
+    display: block;
+    text-align: right;
+    border-bottom: 1px solid #e9ecef;
+    padding-left: 50%;
+    position: relative;
+  }
+  
+  .table td:before {
+    content: attr(data-label);
+    position: absolute;
+    left: 0;
+    width: 50%;
+    padding-left: 0.75rem;
+    font-weight: 700;
+    text-align: left;
+  }
+  
+  .table td:last-child {
+    border-bottom: 0;
+  }
+} 

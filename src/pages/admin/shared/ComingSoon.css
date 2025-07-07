@@ -1,0 +1,44 @@
+/* Shared styles for coming soon pages */
+.coming-soon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 400px;
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  margin-top: 2rem;
+}
+
+.coming-soon-content {
+  text-align: center;
+  padding: 3rem;
+}
+
+.coming-soon-content h2 {
+  margin: 1rem 0;
+  color: #212529;
+  font-weight: 600;
+}
+
+.coming-soon-content p {
+  color: #6c757d;
+  font-size: 1.1rem;
+  margin: 0;
+}
+
+/* Animation for the coming soon pages */
+.coming-soon {
+  animation: fadeIn 0.3s ease-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+} 

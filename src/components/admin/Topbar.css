@@ -1,0 +1,254 @@
+.topbar {
+  background: white;
+  border-bottom: 1px solid #dee2e6;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  padding: 1.2rem 2rem;
+}
+
+.topbar-left {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.sidebar-toggle {
+  color: #6c757d;
+  padding: 0.5rem;
+  border: none;
+  background: none;
+  transition: all 0.3s ease;
+}
+
+.sidebar-toggle:hover {
+  color: #0d6efd;
+  transform: scale(1.2);
+  background-color: #f8f9fa;
+  border-radius: 5px;
+}
+
+.topbar-title {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #212529;
+}
+
+.topbar-right {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+}
+
+.search-container {
+  max-width: 300px;
+}
+
+.search-container .input-group {
+  border-radius: 20px;
+  overflow: hidden;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  transition: all 0.3s ease;
+}
+
+.search-container .input-group:focus-within {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  transform: translateY(-2px);
+}
+
+.search-container .input-group-text {
+  background: white;
+  border: 1px solid #dee2e6;
+  border-right: none;
+  color: #6c757d;
+  transition: all 0.3s ease;
+}
+
+.search-container .form-control {
+  border: 1px solid #dee2e6;
+  border-left: none;
+  padding: 0.5rem 1rem;
+  transition: all 0.3s ease;
+}
+
+.search-container .form-control:focus {
+  box-shadow: none;
+  border-color: #0d6efd;
+}
+
+.search-container .input-group:focus-within .input-group-text {
+  border-color: #0d6efd;
+  color: #0d6efd;
+}
+
+.topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.notification-btn {
+  position: relative;
+  color: #6c757d;
+  padding: 0.5rem;
+  border: none;
+  background: none;
+  transition: all 0.3s ease;
+}
+
+.notification-btn:hover {
+  color: #0d6efd;
+  transform: scale(1.2);
+  background-color: #f8f9fa;
+  border-radius: 5px;
+}
+
+.notification-badge {
+  position: absolute;
+  top: 0;
+  right: 0;
+  background: #dc3545;
+  color: white;
+  font-size: 0.75rem;
+  padding: 0.125rem 0.375rem;
+  border-radius: 10px;
+  min-width: 18px;
+  text-align: center;
+  transition: all 0.3s ease;
+}
+
+.notification-btn:hover .notification-badge {
+  transform: scale(1.1);
+}
+
+.profile-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: #6c757d;
+  padding: 0.5rem;
+  border: none;
+  background: none;
+  transition: all 0.3s ease;
+}
+
+.profile-btn:hover {
+  color: #0d6efd;
+  background-color: #f8f9fa;
+  border-radius: 5px;
+}
+
+.profile-btn:hover i {
+  transform: scale(1.2);
+}
+
+.profile-name {
+  font-weight: 500;
+  font-size: 0.875rem;
+}
+
+/* Dropdown styles */
+.dropdown {
+  position: relative;
+}
+
+.dropdown-menu {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  background: white;
+  border: 1px solid #dee2e6;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  min-width: 200px;
+  z-index: 1000;
+  margin-top: 0.5rem;
+  animation: fadeIn 0.3s ease-out;
+}
+
+.dropdown-item {
+  display: flex;
+  align-items: center;
+  padding: 0.75rem 1rem;
+  color: #212529;
+  text-decoration: none;
+  border: none;
+  background: none;
+  width: 100%;
+  text-align: left;
+  transition: all 0.3s ease;
+}
+
+.dropdown-item:hover {
+  background-color: #f8f9fa;
+  color: #0d6efd;
+  text-decoration: none;
+  transform: translateX(5px);
+}
+
+.dropdown-item:hover i {
+  transform: scale(1.2);
+  color: #3498db;
+}
+
+.dropdown-item.text-danger:hover {
+  background-color: #f8d7da;
+  color: #dc3545;
+}
+
+.dropdown-item.text-danger:hover i {
+  color: #dc3545;
+}
+
+.dropdown-divider {
+  height: 1px;
+  background-color: #dee2e6;
+  margin: 0.5rem 0;
+}
+
+.dropdown-backdrop {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 999;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .topbar {
+    padding: 1rem;
+  }
+  
+  .topbar-title {
+    display: none;
+  }
+  
+  .search-container {
+    display: none;
+  }
+  
+  .topbar-right {
+    gap: 0.5rem;
+  }
+  
+  .profile-name {
+    display: none;
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+} 
