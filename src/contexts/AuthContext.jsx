@@ -1,7 +1,9 @@
-import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
+/* eslint-disable react-refresh/only-export-components */
+import React, { createContext, useContext, useState, useEffect, useMemo, useCallback } from 'react';
 import jwtDecode from 'jwt-decode';
 import api, { authAPI } from '../services/apiService';
 import toast from 'react-hot-toast';
+import { ROLE_IDS, ROLE_NAMES } from '../constants/navigationConfig';
 
 const AuthContext = createContext();
 
@@ -18,7 +20,7 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
 
   // Function to validate token and set user data
-  const validateToken = async (token) => {
+  const validateToken = useCallback(async (token) => {
     try {
       // Set token in axios headers
       api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
@@ -28,11 +30,23 @@ export const AuthProvider = ({ children }) => {
       
       if (response.status === 200) {
         const decoded = jwtDecode(token);
+        const rawRoleId = decoded.roleId ?? decoded.role_id ?? decoded.role ?? null;
+        const roleId = rawRoleId != null ? Number(rawRoleId) : null;
+        const roleKey =
+          roleId === ROLE_IDS.ADMIN
+            ? 'ADMIN'
+            : roleId === ROLE_IDS.SECURITY
+            ? 'SECURITY'
+            : roleId === ROLE_IDS.OWNER
+            ? 'OWNER'
+            : null;
+
         setUser({
           userId: decoded.userId || decoded.sub,
           username: decoded.username || decoded.name,
-          roleId: decoded.roleId || decoded.role_id,
-          roleName: decoded.roleName || decoded.role
+          roleId,
+          roleKey,
+          roleName: ROLE_NAMES[roleId] || decoded.roleName || decoded.role,
         });
         return true;
       }
@@ -43,7 +57,7 @@ export const AuthProvider = ({ children }) => {
       return false;
     }
     return false;
-  };
+  }, []);
 
   useEffect(() => {
     // Check for existing token on app load
@@ -74,9 +88,9 @@ export const AuthProvider = ({ children }) => {
     };
     
     checkAuth();
-  }, []);
+  }, [validateToken]);
 
-  const login = async (username, password) => {
+  const login = useCallback(async (username, password) => {
     try {
       setLoading(true);
       const response = await authAPI.login({ username, password });
@@ -108,22 +122,41 @@ export const AuthProvider = ({ children }) => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [validateToken]);
 
-  const logout = () => {
+  const logout = useCallback(() => {
     localStorage.removeItem('token');
     delete api.defaults.headers.common['Authorization'];
     setUser(null);
     toast.success('Sesión cerrada exitosamente');
-  };
+  }, []);
 
-  const updateUser = (userData) => {
-    setUser(prevUser => ({ ...prevUser, ...userData }));
-  };
+  const updateUser = useCallback((userData) => {
+    setUser((prevUser) => {
+      const nextRoleId = userData.roleId ?? prevUser?.roleId;
+      const roleKey =
+        nextRoleId === ROLE_IDS.ADMIN
+          ? 'ADMIN'
+          : nextRoleId === ROLE_IDS.SECURITY
+          ? 'SECURITY'
+          : nextRoleId === ROLE_IDS.OWNER
+          ? 'OWNER'
+          : prevUser?.roleKey ?? null;
+
+      return {
+        ...prevUser,
+        ...userData,
+        roleId: nextRoleId,
+        roleKey,
+        roleName:
+          userData.roleName ?? ROLE_NAMES[nextRoleId] ?? prevUser?.roleName ?? null,
+      };
+    });
+  }, []);
   
-  const forgotPassword = async (email) => {
+  const forgotPassword = useCallback(async (email) => {
     try {
-      const response = await authAPI.forgotPassword(email);
+      await authAPI.forgotPassword(email);
       toast.success('Se ha enviado un correo con instrucciones para restablecer su contraseña');
       return { success: true };
     } catch (error) {
@@ -131,11 +164,11 @@ export const AuthProvider = ({ children }) => {
       toast.error(message);
       return { success: false, error: message };
     }
-  };
+  }, []);
   
-  const resetPassword = async (token, newPassword) => {
+  const resetPassword = useCallback(async (token, newPassword) => {
     try {
-      const response = await authAPI.resetPassword(token, newPassword);
+      await authAPI.resetPassword(token, newPassword);
       toast.success('Contraseña restablecida exitosamente');
       return { success: true };
     } catch (error) {
@@ -143,11 +176,11 @@ export const AuthProvider = ({ children }) => {
       toast.error(message);
       return { success: false, error: message };
     }
-  };
+  }, []);
   
-  const changePassword = async (oldPassword, newPassword) => {
+  const changePassword = useCallback(async (oldPassword, newPassword) => {
     try {
-      const response = await authAPI.changePassword(oldPassword, newPassword);
+      await authAPI.changePassword(oldPassword, newPassword);
       toast.success('Contraseña actualizada exitosamente');
       return { success: true };
     } catch (error) {
@@ -155,7 +188,7 @@ export const AuthProvider = ({ children }) => {
       toast.error(message);
       return { success: false, error: message };
     }
-  };
+  }, []);
 
   // Memoize the context value to prevent unnecessary re-renders
   const value = useMemo(() => ({
@@ -168,10 +201,10 @@ export const AuthProvider = ({ children }) => {
     resetPassword,
     changePassword,
     isAuthenticated: !!user,
-    isAdmin: user?.roleId === 1, // Assuming roleId 1 is admin
-    isOwner: user?.roleId === 3, // Assuming roleId 3 is owner
-    isSecurity: user?.roleId === 2, // Assuming roleId 2 is security
-  }), [user, loading]);
+    isAdmin: user?.roleKey === 'ADMIN',
+    isOwner: user?.roleKey === 'OWNER',
+    isSecurity: user?.roleKey === 'SECURITY',
+  }), [changePassword, forgotPassword, loading, login, logout, resetPassword, updateUser, user]);
 
   return (
     <AuthContext.Provider value={value}>

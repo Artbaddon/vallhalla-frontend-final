@@ -1,9 +1,9 @@
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
+import PropTypes from 'prop-types';
 import './Sidebar.css';
-import { Routes } from '../../constants/Routes.js';
 
-const Sidebar = ({ isOpen, onToggle, currentPath }) => {
+const Sidebar = ({ isOpen, onToggle, currentPath, items }) => {
   const location = useLocation();
 
   const isActive = (path) => {
@@ -20,24 +20,52 @@ const Sidebar = ({ isOpen, onToggle, currentPath }) => {
       </div>
       <div className="sidebar-menu">
         <ul>
-          {Routes.map((route, index) =>
-            route.section ? (
-              <li key={index} className="sidebar-header">
-                <span>{route.section}</span>
-              </li>
-            ) : (
-              <li key={index} className={isActive(route.path)}>
-                <Link to={route.path}>
-                  <i className={`bi ${route.icon}`}></i>
-                  <span>{route.label}</span>
-                </Link>
-              </li>
-            )
-          )}
+          {items.map((item) => {
+            if (item.type === 'section') {
+              return (
+                <li key={item.key} className="sidebar-header">
+                  <span>{item.label}</span>
+                </li>
+              );
+            }
+
+            if (item.type === 'link') {
+              return (
+                <li key={item.key} className={isActive(item.path)}>
+                  <Link to={item.path}>
+                    {item.icon && <i className={`bi ${item.icon}`}></i>}
+                    <span>{item.label}</span>
+                  </Link>
+                </li>
+              );
+            }
+
+            return null;
+          })}
         </ul>
       </div>
     </div>
   );
+};
+
+Sidebar.propTypes = {
+  isOpen: PropTypes.bool.isRequired,
+  onToggle: PropTypes.func.isRequired,
+  currentPath: PropTypes.string,
+  items: PropTypes.arrayOf(
+    PropTypes.shape({
+      type: PropTypes.oneOf(['section', 'link']).isRequired,
+      key: PropTypes.string.isRequired,
+      label: PropTypes.string,
+      icon: PropTypes.string,
+      path: PropTypes.string,
+    })
+  ),
+};
+
+Sidebar.defaultProps = {
+  currentPath: undefined,
+  items: [],
 };
 
 export default Sidebar;

@@ -10,6 +10,8 @@ const PaymentModal = ({
   payment,
   isLoading,
   owners,
+  allowBulk = false,
+  isOwnerRole = false,
 }) => {
   const [isOpen, setIsOpen] = useState(false);
 
@@ -33,8 +35,15 @@ const PaymentModal = ({
     } else if (show) {
       reset();
       setValue("payment_type", "MAINTENANCE");
+      if (!allowBulk && owners?.length === 1) {
+        const owner = owners[0];
+        const ownerId = owner?.Owner_id ?? owner?.id;
+        if (ownerId != null) {
+          setValue("owner_id", ownerId.toString());
+        }
+      }
     }
-  }, [show, payment, setValue, reset]);
+  }, [allowBulk, owners, payment, reset, setValue, show]);
 
   const handleClose = () => {
     setIsOpen(false);
@@ -61,7 +70,9 @@ const PaymentModal = ({
   ];
 
   const ownerOptions = [
-    { value: "all", label: "TODOS LOS PROPIETARIOS" },
+    ...(allowBulk
+      ? [{ value: "all", label: "TODOS LOS PROPIETARIOS" }]
+      : []),
     ...(owners || []).map((owner) => ({
       value: owner.Owner_id || owner.id,
       label:
@@ -70,6 +81,8 @@ const PaymentModal = ({
         }`.trim() || `Propietario #${owner.Owner_id || owner.id}`,
     })),
   ];
+
+  const ownerSelectDisabled = !allowBulk && owners?.length === 1 && isOwnerRole;
 
   return (
     <Modal
@@ -103,6 +116,7 @@ const PaymentModal = ({
               {...register("owner_id", {
                 required: "El propietario es requerido",
               })}
+              disabled={ownerSelectDisabled}
             >
               <option value="">Seleccionar propietario...</option>
               {ownerOptions.map((option) => (
@@ -180,7 +194,7 @@ const PaymentModal = ({
           </div>
 
           {/* Mostrar alerta si es para todos */}
-          {watch("owner_id") === "all" && (
+          {allowBulk && watch("owner_id") === "all" && (
             <div className="alert alert-info">
               <i className="bi bi-info-circle me-2"></i>
               Se creará un pago para todos los propietarios (

@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { Modal, Button, Form, Alert } from 'react-bootstrap';
 import { useForm } from 'react-hook-form';
-import { useQuery, useMutation, useQueryClient } from 'react-query';
+import { useQuery, useQueryClient } from 'react-query';
 import { pqrsAPI, ownersAPI } from '../../../services/api';
 import toast from 'react-hot-toast';
+import { DynamicModal } from '../../../components/common';
 import './PQRS.css';
 
 const PQRSModal = ({ show, mode = 'create', pqrs, categories, onClose, onSave }) => {
@@ -65,49 +65,6 @@ const PQRSModal = ({ show, mode = 'create', pqrs, categories, onClose, onSave })
   console.log('Owners loading:', ownersLoading);
   console.log('Owners error:', ownersError);
   console.log('Final owners array:', owners);
-
-  // Mutations
-  const createMutation = useMutation(pqrsAPI.create, {
-    onSuccess: () => {
-      queryClient.invalidateQueries('pqrs');
-      toast.success('PQRS creado exitosamente');
-      onSave && onSave();
-    },
-    onError: (error) => {
-      toast.error(error.response?.data?.error || error.response?.data?.message || 'Error al crear PQRS');
-    }
-  });
-
-  const updateMutation = useMutation(
-    ({ id, data }) => pqrsAPI.update(id, data),
-    {
-      onSuccess: () => {
-        queryClient.invalidateQueries('pqrs');
-        toast.success('PQRS actualizado exitosamente');
-        onSave && onSave();
-      },
-      onError: (error) => {
-        toast.error(error.response?.data?.error || error.response?.data?.message || 'Error al actualizar PQRS');
-      }
-    }
-  );
-
-  // Admin response mutation
-  const respondMutation = useMutation(
-    ({ id, data }) => pqrsAPI.updateStatus(id, data),
-    {
-      onSuccess: () => {
-        queryClient.invalidateQueries('pqrs');
-        toast.success('Respuesta enviada exitosamente');
-        setShowResponseForm(false);
-        setAdminResponse('');
-        // Keep modal open to show the updated response
-      },
-      onError: (error) => {
-        toast.error(error.response?.data?.error || error.response?.data?.message || 'Error al enviar respuesta');
-      }
-    }
-  );
 
   // Reset form when modal opens/closes or pqrs changes
   useEffect(() => {
@@ -191,7 +148,8 @@ const PQRSModal = ({ show, mode = 'create', pqrs, categories, onClose, onSave })
           formData.append('attachments', file);
         });
 
-        await pqrsAPI.create(formData);
+  await pqrsAPI.create(formData);
+  queryClient.invalidateQueries('pqrs');
         toast.success('PQRS creado exitosamente');
       } else if (mode === 'edit') {
         // For updates, we don't send files (would need separate endpoint)
@@ -203,7 +161,8 @@ const PQRSModal = ({ show, mode = 'create', pqrs, categories, onClose, onSave })
           priority: data.priority
         };
         
-        await pqrsAPI.update(pqrs.PQRS_id, updateData);
+  await pqrsAPI.update(pqrs.PQRS_id, updateData);
+  queryClient.invalidateQueries('pqrs');
         toast.success('PQRS actualizado exitosamente');
       }
 
@@ -229,6 +188,7 @@ const PQRSModal = ({ show, mode = 'create', pqrs, categories, onClose, onSave })
         status_id: 2, // Set to "En proceso" when responding
         admin_response: adminResponse.trim()
       });
+      queryClient.invalidateQueries('pqrs');
       
       toast.success('Respuesta enviada exitosamente');
       setShowResponseForm(false);
@@ -321,355 +281,376 @@ const PQRSModal = ({ show, mode = 'create', pqrs, categories, onClose, onSave })
     }
   };
 
-  return (
-    <Modal 
-      show={show} 
-      onHide={onClose} 
-      size="lg" 
-      centered
-      backdrop="static"
-      keyboard={false}
-      dialogClassName="custom-modal-dialog"
-      style={{
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center'
-      }}
-    >
-      <Modal.Header closeButton>
-        <Modal.Title>{getModalTitle()}</Modal.Title>
-      </Modal.Header>
-      
-      <Modal.Body>
-        {mode === 'view' ? (
-          <div className="pqrs-details">
-            <div className="row mb-3">
-              <div className="col-md-6">
-                <p><strong>ID:</strong> {pqrs.PQRS_id}</p>
-                <p><strong>Asunto:</strong> {pqrs.PQRS_subject}</p>
-                <p><strong>Categoría:</strong> {findCategoryById(pqrs.PQRS_category_FK_ID)}</p>
-                <p><strong>Propietario:</strong> {pqrs.owner_name || findOwnerById(pqrs.Owner_FK_ID)}</p>
-                <p><strong>Prioridad:</strong> 
-                  <span className={`badge ms-2 ${
-                    pqrs.PQRS_priority === 'HIGH' ? 'bg-danger' :
-                    pqrs.PQRS_priority === 'MEDIUM' ? 'bg-warning' : 'bg-info'
-                  }`}>
-                    {pqrs.PQRS_priority}
-                  </span>
-                </p>
-              </div>
-              <div className="col-md-6">
-                <p><strong>Estado:</strong> 
-                  <span className={`badge ms-2 ${
-                    pqrs.current_status_id === 1 ? 'bg-warning' :
-                    pqrs.current_status_id === 2 ? 'bg-primary' :
-                    pqrs.current_status_id === 3 ? 'bg-success' : 'bg-secondary'
-                  }`}>
-                    {getStatusName(pqrs.current_status_id)}
-                  </span>
-                </p>
-                <p><strong>Fecha de creación:</strong> {new Date(pqrs.PQRS_createdAt).toLocaleDateString()}</p>
-                {pqrs.PQRS_updatedAt && (
-                  <p><strong>Última actualización:</strong> {new Date(pqrs.PQRS_updatedAt).toLocaleDateString()}</p>
-                )}
-              </div>
+    const renderViewMode = () => {
+      const safePQRS = pqrs || {};
+
+      return (
+        <div className="pqrs-details">
+          <div className="row mb-3">
+            <div className="col-md-6">
+              <p><strong>ID:</strong> {safePQRS.PQRS_id ?? 'N/A'}</p>
+              <p><strong>Asunto:</strong> {safePQRS.PQRS_subject ?? 'N/A'}</p>
+              <p><strong>Categoría:</strong> {findCategoryById(safePQRS.PQRS_category_FK_ID)}</p>
+              <p><strong>Propietario:</strong> {safePQRS.owner_name || findOwnerById(safePQRS.Owner_FK_ID)}</p>
+              <p>
+                <strong>Prioridad:</strong>
+                <span
+                  className={`badge ms-2 ${
+                    safePQRS.PQRS_priority === 'HIGH'
+                      ? 'bg-danger'
+                      : safePQRS.PQRS_priority === 'MEDIUM'
+                      ? 'bg-warning'
+                      : 'bg-info'
+                  }`}
+                >
+                  {safePQRS.PQRS_priority ?? 'N/A'}
+                </span>
+              </p>
             </div>
-            
-            <div className="mb-3">
-              <h5>Descripción:</h5>
-              <div className="p-3 bg-light rounded">
-                {pqrs.PQRS_description}
-              </div>
-            </div>
-            
-            {/* Attachments */}
-            {pqrs.PQRS_file && (
-              <div className="mb-3">
-                <h5>Archivos adjuntos:</h5>
-                <div className="row">
-                  {getAttachments().map((attachment, index) => (
-                    <div key={index} className="col-md-4 mb-2">
-                      <div className="card">
-                        <div className="card-body d-flex align-items-center">
-                          <i className={`bi ${getFileIcon(attachment.filename)} me-2`}></i>
-                          <div className="flex-grow-1">
-                            <small className="text-muted">{attachment.originalname}</small>
-                          </div>
-                          <a 
-                            href={attachment.url} 
-                            target="_blank" 
-                            rel="noopener noreferrer"
-                            className="btn btn-sm btn-outline-primary"
-                          >
-                            <i className="bi bi-download"></i>
-                          </a>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-            
-            {/* Admin Response Section */}
-            <div className="mb-3">
-              <div className="d-flex justify-content-between align-items-center mb-2">
-                <h5>Respuesta del administrador:</h5>
-                {!pqrs.PQRS_answer && !showResponseForm && (
-                  <Button 
-                    variant="outline-primary" 
-                    size="sm" 
-                    onClick={toggleResponseForm}
-                    disabled={loading}
-                  >
-                    <i className="bi bi-reply me-2"></i>
-                    Responder
-                  </Button>
-                )}
-              </div>
-              
-              {pqrs.PQRS_answer ? (
-                <div className="p-3 bg-light rounded">
-                  {pqrs.PQRS_answer}
-                </div>
-              ) : showResponseForm ? (
-                <div className="border rounded p-3">
-                  <Form.Group className="mb-3">
-                    <Form.Label>Escribir respuesta:</Form.Label>
-                    <Form.Control
-                      as="textarea"
-                      rows={4}
-                      value={adminResponse}
-                      onChange={(e) => setAdminResponse(e.target.value)}
-                      placeholder="Escriba su respuesta al PQRS..."
-                      disabled={loading}
-                    />
-                  </Form.Group>
-                  <div className="d-flex gap-2">
-                    <Button 
-                      variant="primary" 
-                      onClick={handleAdminResponse}
-                      disabled={loading}
-                    >
-                      {loading ? (
-                        <>
-                          <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
-                          Enviando...
-                        </>
-                      ) : (
-                        <>
-                          <i className="bi bi-send me-2"></i>
-                          Enviar Respuesta
-                        </>
-                      )}
-                    </Button>
-                    <Button 
-                      variant="secondary" 
-                      onClick={toggleResponseForm}
-                      disabled={loading}
-                    >
-                      Cancelar
-                    </Button>
-                  </div>
-                </div>
-              ) : (
-                <div className="p-3 bg-light rounded text-muted">
-                  <i className="bi bi-info-circle me-2"></i>
-                  No hay respuesta del administrador
-                </div>
+            <div className="col-md-6">
+              <p>
+                <strong>Estado:</strong>
+                <span
+                  className={`badge ms-2 ${
+                    safePQRS.current_status_id === 1
+                      ? 'bg-warning'
+                      : safePQRS.current_status_id === 2
+                      ? 'bg-primary'
+                      : safePQRS.current_status_id === 3
+                      ? 'bg-success'
+                      : 'bg-secondary'
+                  }`}
+                >
+                  {getStatusName(safePQRS.current_status_id)}
+                </span>
+              </p>
+              <p>
+                <strong>Fecha de creación:</strong>{' '}
+                {safePQRS.PQRS_createdAt
+                  ? new Date(safePQRS.PQRS_createdAt).toLocaleDateString()
+                  : 'N/A'}
+              </p>
+              {safePQRS.PQRS_updatedAt && (
+                <p>
+                  <strong>Última actualización:</strong>{' '}
+                  {new Date(safePQRS.PQRS_updatedAt).toLocaleDateString()}
+                </p>
               )}
             </div>
           </div>
-        ) : (
-          <Form onSubmit={handleSubmit(onSubmit)}>
-            <Form.Group className="mb-3">
-              <Form.Label>Asunto *</Form.Label>
-              <Form.Control
-                type="text"
-                {...register('subject', { required: 'El asunto es requerido' })}
-                isInvalid={!!errors.subject}
-                disabled={loading}
-              />
-              {errors.subject && (
-                <Form.Control.Feedback type="invalid">
-                  {errors.subject.message}
-                </Form.Control.Feedback>
-              )}
-            </Form.Group>
 
-            <div className="row">
-              <div className="col-md-6">
-                <Form.Group className="mb-3">
-                  <Form.Label>Categoría *</Form.Label>
-                  <Form.Select
-                    {...register('category_id', { required: 'La categoría es requerida' })}
-                    isInvalid={!!errors.category_id}
-                    disabled={loading}
-                  >
-                    <option value="">Seleccione una categoría</option>
-                    {Array.isArray(categories) && categories.length > 0 ? (
-                      categories.map(category => (
-                        <option key={`category-${category.id || category.PQRS_category_id}`} value={(category.id || category.PQRS_category_id).toString()}>
-                          {category.name || category.PQRS_category_name}
-                        </option>
-                      ))
-                    ) : (
-                      // Fallback categories if none are loaded
-                      <>
-                        <option value="1">Quejas</option>
-                        <option value="2">Peticiones</option>
-                        <option value="3">Reclamos</option>
-                        <option value="4">Sugerencias</option>
-                      </>
-                    )}
-                  </Form.Select>
-                  {errors.category_id && (
-                    <Form.Control.Feedback type="invalid">
-                      {errors.category_id.message}
-                    </Form.Control.Feedback>
-                  )}
-                </Form.Group>
-              </div>
-              <div className="col-md-6">
-                <Form.Group className="mb-3">
-                  <Form.Label>Propietario *</Form.Label>
-                  <Form.Select
-                    {...register('owner_id', { required: 'El propietario es requerido' })}
-                    isInvalid={!!errors.owner_id}
-                    disabled={loading}
-                  >
-                    <option value="">Seleccione un propietario</option>
-                    {Array.isArray(owners) && owners.length > 0 ? (
-                      owners.map(owner => (
-                        <option key={`owner-${owner.id || owner.Owner_id}`} value={(owner.id || owner.Owner_id).toString()}>
-                          {owner.Profile_fullName || 
-                           owner.name || 
-                           (owner.first_name && owner.last_name ? 
-                             `${owner.first_name} ${owner.last_name}` : 
-                             `ID: ${owner.id || owner.Owner_id}`)}
-                        </option>
-                      ))
-                    ) : (
-                      // Show loading or error message
-                      <option value="" disabled>
-                        {ownersLoading ? 'Cargando propietarios...' : 
-                         ownersError ? 'Error cargando propietarios' : 
-                         'No hay propietarios disponibles'}
-                      </option>
-                    )}
-                  </Form.Select>
-                  {errors.owner_id && (
-                    <Form.Control.Feedback type="invalid">
-                      {errors.owner_id.message}
-                    </Form.Control.Feedback>
-                  )}
-                </Form.Group>
+          <div className="mb-3">
+            <h5>Descripción:</h5>
+            <div className="p-3 bg-light rounded">
+              {safePQRS.PQRS_description || 'Sin descripción'}
+            </div>
+          </div>
+
+          {safePQRS.PQRS_file && (
+            <div className="mb-3">
+              <h5>Archivos adjuntos:</h5>
+              <div className="row">
+                {getAttachments().map((attachment, index) => (
+                  <div key={index} className="col-md-4 mb-2">
+                    <div className="card">
+                      <div className="card-body d-flex align-items-center">
+                        <i className={`bi ${getFileIcon(attachment.filename)} me-2`}></i>
+                        <div className="flex-grow-1">
+                          <small className="text-muted">{attachment.originalname}</small>
+                        </div>
+                        <a
+                          href={attachment.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="btn btn-sm btn-outline-primary"
+                        >
+                          <i className="bi bi-download"></i>
+                        </a>
+                      </div>
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
+          )}
 
-            <Form.Group className="mb-3">
-              <Form.Label>Prioridad</Form.Label>
-              <Form.Select {...register('priority')} disabled={loading}>
-                <option value="LOW">Baja</option>
-                <option value="MEDIUM">Media</option>
-                <option value="HIGH">Alta</option>
-              </Form.Select>
-            </Form.Group>
-
-            <Form.Group className="mb-3">
-              <Form.Label>Descripción *</Form.Label>
-              <Form.Control
-                as="textarea"
-                rows={4}
-                {...register('description', { required: 'La descripción es requerida' })}
-                isInvalid={!!errors.description}
-                disabled={loading}
-              />
-              {errors.description && (
-                <Form.Control.Feedback type="invalid">
-                  {errors.description.message}
-                </Form.Control.Feedback>
-              )}
-            </Form.Group>
-
-            {/* File Upload - Only for new PQRS */}
-            {mode === 'create' && (
-              <Form.Group className="mb-3">
-                <Form.Label>Archivos adjuntos</Form.Label>
-                <Form.Control
-                  type="file"
-                  multiple
-                  accept="image/*,.pdf,.txt"
-                  onChange={handleFileChange}
+          <div className="mb-3">
+            <div className="d-flex justify-content-between align-items-center mb-2">
+              <h5>Respuesta del administrador:</h5>
+              {!safePQRS.PQRS_answer && !showResponseForm && (
+                <button
+                  type="button"
+                  className="btn btn-outline-primary btn-sm"
+                  onClick={toggleResponseForm}
                   disabled={loading}
-                />
-                <Form.Text className="text-muted">
-                  Máximo 5 archivos. Tipos permitidos: imágenes, PDF, archivos de texto. Tamaño máximo: 5MB por archivo.
-                </Form.Text>
-                
-                {/* Selected files preview */}
-                {selectedFiles.length > 0 && (
-                  <div className="mt-2">
-                    <small className="text-muted">Archivos seleccionados:</small>
-                    {selectedFiles.map((file, index) => (
-                      <div key={index} className="d-flex justify-content-between align-items-center mt-1 p-2 bg-light rounded">
-                        <span>
-                          <i className={`bi ${getFileIcon(file.name)} me-2`}></i>
-                          {file.name} ({(file.size / 1024 / 1024).toFixed(2)} MB)
-                        </span>
-                        <Button
-                          variant="outline-danger"
-                          size="sm"
-                          onClick={() => removeFile(index)}
-                          disabled={loading}
-                        >
-                          <i className="bi bi-x"></i>
-                        </Button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </Form.Group>
-            )}
+                >
+                  <i className="bi bi-reply me-2"></i>
+                  Responder
+                </button>
+              )}
+            </div>
 
-            {/* Update notice for existing PQRS */}
-            {mode === 'edit' && (
-              <Alert variant="info">
+            {safePQRS.PQRS_answer ? (
+              <div className="p-3 bg-light rounded">{safePQRS.PQRS_answer}</div>
+            ) : showResponseForm ? (
+              <div className="border rounded p-3">
+                <div className="mb-3">
+                  <label className="form-label" htmlFor="admin-response-textarea">
+                    Escribir respuesta:
+                  </label>
+                  <textarea
+                    id="admin-response-textarea"
+                    className="form-control"
+                    rows={4}
+                    value={adminResponse}
+                    onChange={(e) => setAdminResponse(e.target.value)}
+                    placeholder="Escriba su respuesta al PQRS..."
+                    disabled={loading}
+                  />
+                </div>
+                <div className="d-flex gap-2">
+                  <button
+                    type="button"
+                    className="btn btn-primary"
+                    onClick={handleAdminResponse}
+                    disabled={loading}
+                  >
+                    {loading ? (
+                      <>
+                        <span
+                          className="spinner-border spinner-border-sm me-2"
+                          role="status"
+                          aria-hidden="true"
+                        ></span>
+                        Enviando...
+                      </>
+                    ) : (
+                      <>
+                        <i className="bi bi-send me-2"></i>
+                        Enviar Respuesta
+                      </>
+                    )}
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    onClick={toggleResponseForm}
+                    disabled={loading}
+                  >
+                    Cancelar
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="p-3 bg-light rounded text-muted">
                 <i className="bi bi-info-circle me-2"></i>
-                Los archivos adjuntos no se pueden modificar al editar un PQRS existente.
-              </Alert>
+                No hay respuesta del administrador
+              </div>
             )}
-          </Form>
-        )}
-      </Modal.Body>
-      
-      <Modal.Footer>
-        <Button variant="secondary" onClick={onClose} disabled={loading}>
-          Cerrar
-        </Button>
-        
-        {mode !== 'view' && (
-          <Button 
-            variant="primary" 
-            onClick={handleSubmit(onSubmit)}
+          </div>
+        </div>
+      );
+    };
+
+    const renderFormMode = () => (
+      <>
+        <div className="mb-3">
+          <label htmlFor="pqrs-subject" className="form-label">
+            Asunto *
+          </label>
+          <input
+            id="pqrs-subject"
+            type="text"
+            className={`form-control${errors.subject ? ' is-invalid' : ''}`}
+            {...register('subject', { required: 'El asunto es requerido' })}
+            disabled={loading}
+          />
+          {errors.subject && (
+            <div className="invalid-feedback">{errors.subject.message}</div>
+          )}
+        </div>
+
+        <div className="row">
+          <div className="col-md-6">
+            <div className="mb-3">
+              <label htmlFor="pqrs-category" className="form-label">
+                Categoría *
+              </label>
+              <select
+                id="pqrs-category"
+                className={`form-select${errors.category_id ? ' is-invalid' : ''}`}
+                {...register('category_id', { required: 'La categoría es requerida' })}
+                disabled={loading}
+              >
+                <option value="">Seleccione una categoría</option>
+                {Array.isArray(categories) && categories.length > 0 ? (
+                  categories.map((category) => (
+                    <option
+                      key={`category-${category.id || category.PQRS_category_id}`}
+                      value={(category.id || category.PQRS_category_id).toString()}
+                    >
+                      {category.name || category.PQRS_category_name}
+                    </option>
+                  ))
+                ) : (
+                  <>
+                    <option value="1">Quejas</option>
+                    <option value="2">Peticiones</option>
+                    <option value="3">Reclamos</option>
+                    <option value="4">Sugerencias</option>
+                  </>
+                )}
+              </select>
+              {errors.category_id && (
+                <div className="invalid-feedback">{errors.category_id.message}</div>
+              )}
+            </div>
+          </div>
+          <div className="col-md-6">
+            <div className="mb-3">
+              <label htmlFor="pqrs-owner" className="form-label">
+                Propietario *
+              </label>
+              <select
+                id="pqrs-owner"
+                className={`form-select${errors.owner_id ? ' is-invalid' : ''}`}
+                {...register('owner_id', { required: 'El propietario es requerido' })}
+                disabled={loading}
+              >
+                <option value="">Seleccione un propietario</option>
+                {Array.isArray(owners) && owners.length > 0 ? (
+                  owners.map((owner) => (
+                    <option
+                      key={`owner-${owner.id || owner.Owner_id}`}
+                      value={(owner.id || owner.Owner_id).toString()}
+                    >
+                      {owner.Profile_fullName ||
+                        owner.name ||
+                        (owner.first_name && owner.last_name
+                          ? `${owner.first_name} ${owner.last_name}`
+                          : `ID: ${owner.id || owner.Owner_id}`)}
+                    </option>
+                  ))
+                ) : (
+                  <option value="" disabled>
+                    {ownersLoading
+                      ? 'Cargando propietarios...'
+                      : ownersError
+                      ? 'Error cargando propietarios'
+                      : 'No hay propietarios disponibles'}
+                  </option>
+                )}
+              </select>
+              {errors.owner_id && (
+                <div className="invalid-feedback">{errors.owner_id.message}</div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        <div className="mb-3">
+          <label htmlFor="pqrs-priority" className="form-label">
+            Prioridad
+          </label>
+          <select
+            id="pqrs-priority"
+            className="form-select"
+            {...register('priority')}
             disabled={loading}
           >
-            {loading ? (
-              <>
-                <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
-                {mode === 'create' ? 'Creando...' : 'Guardando...'}
-              </>
-            ) : (
-              <>
-                <i className={`bi ${mode === 'create' ? 'bi-plus' : 'bi-check'} me-2`}></i>
-                {mode === 'create' ? 'Crear PQRS' : 'Guardar Cambios'}
-              </>
+            <option value="LOW">Baja</option>
+            <option value="MEDIUM">Media</option>
+            <option value="HIGH">Alta</option>
+          </select>
+        </div>
+
+        <div className="mb-3">
+          <label htmlFor="pqrs-description" className="form-label">
+            Descripción *
+          </label>
+          <textarea
+            id="pqrs-description"
+            className={`form-control${errors.description ? ' is-invalid' : ''}`}
+            rows={4}
+            {...register('description', { required: 'La descripción es requerida' })}
+            disabled={loading}
+          ></textarea>
+          {errors.description && (
+            <div className="invalid-feedback">{errors.description.message}</div>
+          )}
+        </div>
+
+        {mode === 'create' && (
+          <div className="mb-3">
+            <label htmlFor="pqrs-attachments" className="form-label">
+              Archivos adjuntos
+            </label>
+            <input
+              id="pqrs-attachments"
+              type="file"
+              multiple
+              accept="image/*,.pdf,.txt"
+              className="form-control"
+              onChange={handleFileChange}
+              disabled={loading}
+            />
+            <div className="form-text text-muted">
+              Máximo 5 archivos. Tipos permitidos: imágenes, PDF, archivos de texto. Tamaño máximo: 5MB por archivo.
+            </div>
+            {selectedFiles.length > 0 && (
+              <div className="mt-2">
+                <small className="text-muted">Archivos seleccionados:</small>
+                {selectedFiles.map((file, index) => (
+                  <div
+                    key={index}
+                    className="d-flex justify-content-between align-items-center mt-1 p-2 bg-light rounded"
+                  >
+                    <span>
+                      <i className={`bi ${getFileIcon(file.name)} me-2`}></i>
+                      {file.name} ({(file.size / 1024 / 1024).toFixed(2)} MB)
+                    </span>
+                    <button
+                      type="button"
+                      className="btn btn-outline-danger btn-sm"
+                      onClick={() => removeFile(index)}
+                      disabled={loading}
+                    >
+                      <i className="bi bi-x"></i>
+                    </button>
+                  </div>
+                ))}
+              </div>
             )}
-          </Button>
+          </div>
         )}
-      </Modal.Footer>
-    </Modal>
-  );
+
+        {mode === 'edit' && (
+          <div className="alert alert-info" role="alert">
+            <i className="bi bi-info-circle me-2"></i>
+            Los archivos adjuntos no se pueden modificar al editar un PQRS existente.
+          </div>
+        )}
+      </>
+    );
+
+    const submitText = mode === 'create'
+      ? (loading ? 'Creando...' : 'Crear PQRS')
+      : (loading ? 'Guardando...' : 'Guardar Cambios');
+
+    return (
+      <DynamicModal
+        isOpen={show}
+        onClose={onClose}
+        title={getModalTitle()}
+        size="lg"
+        onSubmit={mode === 'view' ? undefined : handleSubmit(onSubmit)}
+        submitText={submitText}
+        isSubmitting={mode !== 'view' && loading}
+        showFooter={mode !== 'view'}
+      >
+        {mode === 'view' ? renderViewMode() : renderFormMode()}
+      </DynamicModal>
+    );
 };
 
 export default PQRSModal; 

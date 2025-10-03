@@ -5,8 +5,15 @@ import toast from "react-hot-toast";
 import Swal from "sweetalert2";
 import PetModal from "./PetModal";
 import "./Pets.css";
+import useFeatureAccess from "../../../hooks/useFeatureAccess";
 
 const Pets = () => {
+  const { can: petsCan } = useFeatureAccess("pets");
+  const canView = petsCan.canView;
+  const canCreate = petsCan.canCreate;
+  const canEdit = petsCan.canEdit;
+  const canDelete = petsCan.canDelete;
+
   const [showModal, setShowModal] = useState(false);
   const [editingPet, setEditingPet] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
@@ -20,6 +27,7 @@ const Pets = () => {
     isLoading,
     error,
   } = useQuery("pets", petsAPI.getAll, {
+    enabled: canView,
     onSuccess: (response) => {
       console.log("Pets data received:", response?.data);
     },
@@ -106,16 +114,19 @@ const Pets = () => {
   });
 
   const handleCreate = () => {
+    if (!canCreate) return;
     setEditingPet(null);
     setShowModal(true);
   };
 
   const handleEdit = (pet) => {
+    if (!canEdit) return;
     setEditingPet(pet);
     setShowModal(true);
   };
 
   const handleDelete = (pet) => {
+    if (!canDelete) return;
     Swal.fire({
       title: "¿Está seguro?",
       text: "Esta acción no se puede deshacer",
@@ -126,7 +137,7 @@ const Pets = () => {
       confirmButtonText: "Sí, eliminar",
       cancelButtonText: "Cancelar",
     }).then((result) => {
-      if (result.isConfirmed) {
+      if (result.isConfirmed && canDelete) {
         deleteMutation.mutate(pet.id);
       }
     });
@@ -150,7 +161,7 @@ const Pets = () => {
           `
           )
           .join("");
-      } catch (e) {
+      } catch {
         photoHtml = '<p class="text-muted">No hay fotos disponibles</p>';
       }
     } else {
@@ -187,8 +198,10 @@ const Pets = () => {
 
   const handleSubmit = (data) => {
     if (editingPet) {
+      if (!canEdit) return;
       updateMutation.mutate({ id: editingPet.id, data });
     } else {
+      if (!canCreate) return;
       createMutation.mutate(data);
     }
   };
@@ -210,13 +223,15 @@ const Pets = () => {
             Administre el registro de mascotas en la propiedad
           </p>
         </div>
-        <button
-          className="btn btn-primary"
-          onClick={handleCreate}
-          disabled={isLoading}
-        >
-          <i className="bi bi-plus-lg"></i> Nueva Mascota
-        </button>
+        {canCreate && (
+          <button
+            className="btn btn-outline-primary"
+            onClick={handleCreate}
+            disabled={isLoading}
+          >
+            <i className="bi bi-plus-lg"></i> Nueva Mascota
+          </button>
+        )}
       </div>
 
       {/* Search and Filters */}
@@ -338,22 +353,26 @@ const Pets = () => {
                         >
                           <i className="bi bi-eye"></i>
                         </button>
-                        <button
-                          type="button"
-                          className="btn btn-outline-secondary"
-                          onClick={() => handleEdit(pet)}
-                          title="Editar"
-                        >
-                          <i className="bi bi-pencil"></i>
-                        </button>
-                        <button
-                          type="button"
-                          className="btn btn-outline-danger"
-                          onClick={() => handleDelete(pet)}
-                          title="Eliminar"
-                        >
-                          <i className="bi bi-trash"></i>
-                        </button>
+                        {canEdit && (
+                          <button
+                            type="button"
+                            className="btn btn-outline-secondary"
+                            onClick={() => handleEdit(pet)}
+                            title="Editar"
+                          >
+                            <i className="bi bi-pencil"></i>
+                          </button>
+                        )}
+                        {canDelete && (
+                          <button
+                            type="button"
+                            className="btn btn-outline-danger"
+                            onClick={() => handleDelete(pet)}
+                            title="Eliminar"
+                          >
+                            <i className="bi bi-trash"></i>
+                          </button>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -366,7 +385,7 @@ const Pets = () => {
 
       {/* Pet Modal */}
       <PetModal
-        show={showModal}
+        show={showModal && (canCreate || canEdit)}
         onHide={() => {
           setShowModal(false);
           setEditingPet(null);

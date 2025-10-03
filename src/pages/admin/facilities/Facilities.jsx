@@ -1,98 +1,96 @@
-import React, { useState } from 'react';
-import { useQuery, useMutation, useQueryClient } from 'react-query';
+import React, { useMemo, useState } from 'react';
+import { useMutation } from 'react-query';
 import { facilitiesAPI } from '../../../services/api';
 import toast from 'react-hot-toast';
 import Swal from 'sweetalert2';
 import FacilityModal from './FacilityModal';
+import {
+  AdminPageLayout,
+  ResourceToolbar,
+  DataTable,
+} from '../../../components/common';
+import useCrudResource from '../../../hooks/useCrudResource';
 import './Facilities.css';
+
+const STATUS_OPTIONS = [
+  { value: 'available', label: 'Disponible' },
+  { value: 'maintenance', label: 'En mantenimiento' },
+  { value: 'reserved', label: 'Reservado' },
+  { value: 'unavailable', label: 'No disponible' },
+];
+
+const getStatusBadgeClass = (status) => {
+  switch ((status || '').toLowerCase()) {
+    case 'available':
+      return 'bg-success';
+    case 'maintenance':
+      return 'bg-warning text-dark';
+    case 'reserved':
+      return 'bg-primary';
+    case 'unavailable':
+      return 'bg-danger';
+    default:
+      return 'bg-secondary';
+  }
+};
 
 const Facilities = () => {
   const [showModal, setShowModal] = useState(false);
   const [editingFacility, setEditingFacility] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
-  const queryClient = useQueryClient();
 
-  // Fetch facilities data
-  const { data: response, isLoading, error } = useQuery('facilities', facilitiesAPI.getAll, {
-    onSuccess: (response) => {
-      console.log('Facilities data received:', response);
-    },
-    onError: (err) => {
-      console.error('Error fetching facilities:', err);
-    }
-  });
-
-  // Ensure facilities is always an array
-  const facilities = Array.isArray(response) ? response : [];
-
-  // Mutations
-  const createMutation = useMutation(facilitiesAPI.create, {
-    onSuccess: () => {
-      queryClient.invalidateQueries('facilities');
-      toast.success('Instalación creada exitosamente');
+  const facilitiesResource = useCrudResource({
+    queryKey: 'facilities',
+    fetcher: facilitiesAPI.getAll,
+    select: (data) => (Array.isArray(data) ? data : data?.data ?? []),
+    resourceLabel: { singular: 'instalación', plural: 'instalaciones' },
+    createFn: facilitiesAPI.create,
+    updateFn: ({ id, data }) => facilitiesAPI.update(id, data),
+    deleteFn: facilitiesAPI.delete,
+    onCreateSuccess: () => setShowModal(false),
+    onUpdateSuccess: () => {
       setShowModal(false);
+      setEditingFacility(null);
     },
-    onError: (error) => {
-      console.error('Create Facility Error:', error);
-      toast.error(error.response?.data?.message || 'Error al crear instalación');
-    }
   });
-
-  const updateMutation = useMutation(
-    ({ id, data }) => facilitiesAPI.update(id, data),
-    {
-      onSuccess: () => {
-        queryClient.invalidateQueries('facilities');
-        toast.success('Instalación actualizada exitosamente');
-        setShowModal(false);
-        setEditingFacility(null);
-      },
-      onError: (error) => {
-        console.error('Update Facility Error:', error);
-        toast.error(error.response?.data?.message || 'Error al actualizar instalación');
-      }
-    }
-  );
 
   const updateStatusMutation = useMutation(
     ({ id, status }) => facilitiesAPI.updateStatus(id, status),
     {
       onSuccess: () => {
-        queryClient.invalidateQueries('facilities');
         toast.success('Estado de la instalación actualizado exitosamente');
+        facilitiesResource.refetch();
       },
       onError: (error) => {
         console.error('Update Status Error:', error);
-        toast.error(error.response?.data?.message || 'Error al actualizar estado');
-      }
-    }
+        toast.error(
+          error.response?.data?.message || 'Error al actualizar estado',
+        );
+      },
+    },
   );
 
-  const deleteMutation = useMutation(facilitiesAPI.delete, {
-    onSuccess: () => {
-      queryClient.invalidateQueries('facilities');
-      toast.success('Instalación eliminada exitosamente');
-    },
-    onError: (error) => {
-      console.error('Delete Facility Error:', error);
-      toast.error(error.response?.data?.message || 'Error al eliminar instalación');
-    }
-  });
+  const facilities = useMemo(
+    () => facilitiesResource.items ?? [],
+    [facilitiesResource.items],
+  );
 
-  // Filter facilities based on search term and status
-  const filteredFacilities = facilities.filter(facility => {
-    const facilityName = facility.name || '';
-    const facilityDescription = facility.description || '';
-    const facilityStatus = facility.status || '';
-    
-    const matchesSearch = facilityName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      facilityDescription.toLowerCase().includes(searchTerm.toLowerCase());
-    
-    const matchesStatus = !statusFilter || facilityStatus.toLowerCase() === statusFilter.toLowerCase();
-    
-    return matchesSearch && matchesStatus;
-  });
+  const filteredFacilities = useMemo(() => {
+    const search = searchTerm.trim().toLowerCase();
+    return facilities.filter((facility) => {
+      const name = (facility.name || '').toLowerCase();
+      const description = (facility.description || '').toLowerCase();
+      const status = (facility.status || '').toLowerCase();
+      const matchesSearch =
+        !search ||
+        name.includes(search) ||
+        description.includes(search);
+      const matchesStatus =
+        !statusFilter || status === statusFilter.toLowerCase();
+      return matchesSearch && matchesStatus;
+    });
+  }, [facilities, searchTerm, statusFilter]);
 
   const handleCreate = () => {
     setEditingFacility(null);
@@ -105,7 +103,7 @@ const Facilities = () => {
       name: facility.name,
       description: facility.description,
       capacity: facility.capacity,
-      status: facility.status
+      status: facility.status,
     });
     setShowModal(true);
   };
@@ -113,16 +111,16 @@ const Facilities = () => {
   const handleDelete = (facility) => {
     Swal.fire({
       title: '¿Está seguro?',
-      text: "Esta acción no se puede deshacer",
+      text: 'Esta acción no se puede deshacer',
       icon: 'warning',
       showCancelButton: true,
       confirmButtonColor: '#dc3545',
       cancelButtonColor: '#6c757d',
       confirmButtonText: 'Sí, eliminar',
-      cancelButtonText: 'Cancelar'
+      cancelButtonText: 'Cancelar',
     }).then((result) => {
       if (result.isConfirmed) {
-        deleteMutation.mutate(facility.id);
+        facilitiesResource.remove(facility.id);
       }
     });
   };
@@ -132,221 +130,155 @@ const Facilities = () => {
   };
 
   const handleSubmit = (formData) => {
-    console.log('Form data submitted:', formData);
-    
     if (editingFacility) {
-      updateMutation.mutate({ id: editingFacility.id, data: formData });
+      facilitiesResource.update({ id: editingFacility.id, data: formData });
     } else {
-      createMutation.mutate(formData);
+      facilitiesResource.create(formData);
     }
   };
 
-  const getStatusBadgeClass = (status) => {
-    switch (status?.toLowerCase()) {
-      case 'available':
-        return 'bg-success';
-      case 'maintenance':
-        return 'bg-warning text-dark';
-      case 'reserved':
-        return 'bg-primary';
-      case 'unavailable':
-        return 'bg-danger';
-      default:
-        return 'bg-secondary';
-    }
-  };
-
-  if (error) {
-    return (
-      <div className="alert alert-danger" role="alert">
-        Error al cargar las instalaciones: {error.message}
-      </div>
-    );
-  }
+  const columns = [
+    {
+      key: 'name',
+      header: 'Nombre',
+      render: (facility) => facility.name,
+    },
+    {
+      key: 'description',
+      header: 'Descripción',
+      render: (facility) => facility.description,
+    },
+    {
+      key: 'capacity',
+      header: 'Capacidad',
+      render: (facility) => facility.capacity ?? 'N/A',
+    },
+    {
+      key: 'status',
+      header: 'Estado',
+      render: (facility) => (
+        <span className={`badge ${getStatusBadgeClass(facility.status)}`}>
+          {facility.status || 'Desconocido'}
+        </span>
+      ),
+    },
+    {
+      key: 'actions',
+      header: 'Acciones',
+      headerClassName: 'text-end',
+      cellClassName: 'text-end',
+      render: (facility) => (
+        <div className="btn-group" role="group">
+          <button
+            type="button"
+            className="btn btn-outline-primary btn-sm"
+            onClick={() => handleEdit(facility)}
+          >
+            <i className="bi bi-pencil"></i>
+          </button>
+          <button
+            type="button"
+            className="btn btn-outline-danger btn-sm"
+            onClick={() => handleDelete(facility)}
+            disabled={facilitiesResource.mutations.delete.isLoading}
+          >
+            <i className="bi bi-trash"></i>
+          </button>
+          <div className="btn-group" role="group">
+            <button
+              type="button"
+              className="btn btn-outline-secondary btn-sm dropdown-toggle"
+              data-bs-toggle="dropdown"
+              aria-expanded="false"
+            >
+              Estado
+            </button>
+            <ul className="dropdown-menu">
+              {STATUS_OPTIONS.map((option) => (
+                <li key={`${facility.id}-${option.value}`}>
+                  <button
+                    type="button"
+                    className="dropdown-item"
+                    onClick={() => handleStatusChange(facility, option.value)}
+                  >
+                    {option.label}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      ),
+    },
+  ];
 
   return (
-    <div className="facilities-page">
-      <div className="page-header">
-        <div className="header-content">
-          <h1>Gestión de Instalaciones</h1>
-          <p className="text-muted">Administre las áreas comunes y espacios del conjunto residencial</p>
-        </div>
-        <button 
-          className="btn btn-primary" 
+    <AdminPageLayout
+      title="Gestión de Instalaciones"
+      description="Administre las áreas comunes y espacios del conjunto residencial"
+      actions={
+        <button
+          type="button"
+          className="btn btn-primary"
           onClick={handleCreate}
-          disabled={isLoading}
+          disabled={facilitiesResource.mutations.create.isLoading}
         >
           <i className="bi bi-plus-lg"></i> Añadir Instalación
         </button>
-      </div>
+      }
+    >
+      <ResourceToolbar
+        search={{
+          id: 'facility-search',
+          label: 'Buscar',
+          placeholder: 'Buscar instalaciones...',
+          value: searchTerm,
+          icon: 'bi-search',
+          onChange: setSearchTerm,
+        }}
+        filters={[
+          {
+            id: 'facility-status',
+            label: 'Estado',
+            placeholder: 'Todos los estados',
+            value: statusFilter,
+            icon: 'bi-filter',
+            onChange: setStatusFilter,
+            allowClear: true,
+            options: STATUS_OPTIONS,
+          },
+        ]}
+      />
 
-      {/* Search and Filters */}
-      <div className="search-section">
-        <div className="row">
-          <div className="col-md-6">
-            <div className="input-group">
-              <span className="input-group-text">
-                <i className="bi bi-search"></i>
-              </span>
-              <input
-                type="text"
-                className="form-control"
-                placeholder="Buscar instalaciones..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-              />
-            </div>
+      {facilitiesResource.isError && (
+        <div className="alert alert-danger" role="alert">
+          Error al cargar las instalaciones: {facilitiesResource.error?.message}
+        </div>
+      )}
+
+      <div className="card">
+        <div className="card-body">
+          <div className="d-flex justify-content-between align-items-center mb-3">
+            <h3 className="h5 mb-0">Lista de Instalaciones</h3>
+            <span className="badge bg-primary">
+              {filteredFacilities.length} instalaciones
+            </span>
           </div>
-          <div className="col-md-6">
-            <div className="input-group">
-              <span className="input-group-text">
-                <i className="bi bi-filter"></i>
-              </span>
-              <select
-                className="form-select"
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
-              >
-                <option value="">Todos los estados</option>
-                <option value="available">Disponible</option>
-                <option value="maintenance">En mantenimiento</option>
-                <option value="reserved">Reservado</option>
-                <option value="unavailable">No disponible</option>
-              </select>
-              {statusFilter && (
-                <button 
-                  className="btn btn-outline-secondary" 
-                  type="button"
-                  onClick={() => setStatusFilter('')}
-                >
-                  <i className="bi bi-x"></i>
-                </button>
-              )}
-            </div>
-          </div>
+          <DataTable
+            columns={columns}
+            data={filteredFacilities}
+            isLoading={facilitiesResource.isLoading}
+            loadingMessage="Cargando instalaciones..."
+            emptyMessage={
+              searchTerm || statusFilter
+                ? 'No se encontraron instalaciones con esos criterios'
+                : 'No hay instalaciones registradas'
+            }
+            rowKey={(facility) => facility.id}
+          />
         </div>
       </div>
 
-      {/* Facilities Table */}
-      <div className="table-container">
-        <div className="table-header">
-          <h3>Lista de Instalaciones</h3>
-          <span className="badge bg-primary">{filteredFacilities.length} instalaciones</span>
-        </div>
-        
-        {isLoading ? (
-          <div className="loading-container">
-            <div className="spinner-border text-primary" role="status">
-              <span className="visually-hidden">Cargando...</span>
-            </div>
-            <p>Cargando instalaciones...</p>
-          </div>
-        ) : (
-          <div className="table-responsive">
-            <table className="table table-hover">
-              <thead>
-                <tr>
-                  <th>Nombre</th>
-                  <th>Descripción</th>
-                  <th>Capacidad</th>
-                  <th>Estado</th>
-                  <th>Acciones</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredFacilities.length === 0 ? (
-                  <tr>
-                    <td colSpan="5" className="text-center text-muted py-4">
-                      {searchTerm || statusFilter ? 'No se encontraron instalaciones con esos criterios' : 'No hay instalaciones registradas'}
-                    </td>
-                  </tr>
-                ) : (
-                  filteredFacilities.map((facility) => (
-                    <tr key={facility.id}>
-                      <td>{facility.name}</td>
-                      <td>{facility.description}</td>
-                      <td>{facility.capacity || 'N/A'}</td>
-                      <td>
-                        <span className={`badge ${getStatusBadgeClass(facility.status)}`}>
-                          {facility.status || 'Desconocido'}
-                        </span>
-                      </td>
-                      <td>
-                        <div className="btn-group" role="group">
-                          <button
-                            type="button"
-                            className="btn btn-outline-primary btn-sm"
-                            onClick={() => handleEdit(facility)}
-                          >
-                            <i className="bi bi-pencil"></i> Editar
-                          </button>
-                          <button
-                            type="button"
-                            className="btn btn-outline-danger btn-sm"
-                            onClick={() => handleDelete(facility)}
-                          >
-                            <i className="bi bi-trash"></i> Eliminar
-                          </button>
-                          <div className="btn-group" role="group">
-                            <button
-                              type="button"
-                              className="btn btn-outline-secondary btn-sm dropdown-toggle"
-                              data-bs-toggle="dropdown"
-                              aria-expanded="false"
-                            >
-                              Estado
-                            </button>
-                            <ul className="dropdown-menu">
-                              <li>
-                                <button
-                                  className="dropdown-item"
-                                  onClick={() => handleStatusChange(facility, 'available')}
-                                >
-                                  <i className="bi bi-check-circle text-success me-2"></i>
-                                  Disponible
-                                </button>
-                              </li>
-                              <li>
-                                <button
-                                  className="dropdown-item"
-                                  onClick={() => handleStatusChange(facility, 'maintenance')}
-                                >
-                                  <i className="bi bi-tools text-warning me-2"></i>
-                                  En mantenimiento
-                                </button>
-                              </li>
-                              <li>
-                                <button
-                                  className="dropdown-item"
-                                  onClick={() => handleStatusChange(facility, 'reserved')}
-                                >
-                                  <i className="bi bi-calendar-check text-primary me-2"></i>
-                                  Reservado
-                                </button>
-                              </li>
-                              <li>
-                                <button
-                                  className="dropdown-item"
-                                  onClick={() => handleStatusChange(facility, 'unavailable')}
-                                >
-                                  <i className="bi bi-x-circle text-danger me-2"></i>
-                                  No disponible
-                                </button>
-                              </li>
-                            </ul>
-                          </div>
-                        </div>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
-
-      {/* Facility Modal */}
       {showModal && (
         <FacilityModal
           isOpen={showModal}
@@ -358,8 +290,8 @@ const Facilities = () => {
           facility={editingFacility}
         />
       )}
-    </div>
+    </AdminPageLayout>
   );
 };
 
-export default Facilities; 
+export default Facilities;

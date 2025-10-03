@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from 'react-query';
 import { towersAPI } from '../../../services/api';
 import { toast } from 'react-hot-toast';
 import './Towers.css';
+import { DynamicModal } from '../../../components/common';
 
 const Towers = () => {
   const [showModal, setShowModal] = useState(false);
@@ -148,7 +149,7 @@ const Towers = () => {
           <h1>Gestión de Torres</h1>
           <p className="text-muted">Administre las torres del conjunto residencial</p>
         </div>
-        <button className="btn btn-primary" onClick={handleAddNew}>
+        <button className="btn btn-outline-primary" onClick={handleAddNew}>
           <i className="bi bi-plus-lg"></i> Añadir Torre
         </button>
       </div>
@@ -215,59 +216,26 @@ const Towers = () => {
         </div>
       )}
 
-      {/* Add/Edit Tower Modal */}
-      {showModal && (
-        <div className="modal show d-block" tabIndex="-1">
-          <div className="modal-dialog">
-            <div className="modal-content">
-              <div className="modal-header">
-                <h5 className="modal-title">
-                  {editingTower ? 'Editar Torre' : 'Añadir Torre'}
-                </h5>
-                <button
-                  type="button"
-                  className="btn-close"
-                  onClick={closeModal}
-                ></button>
-              </div>
-              <form onSubmit={handleSubmit}>
-                <div className="modal-body">
-                  <div className="mb-3">
-                    <label htmlFor="tower_name" className="form-label">Nombre de la Torre</label>
-                    <input
-                      type="text"
-                      className="form-control"
-                      id="tower_name"
-                      name="tower_name"
-                      defaultValue={editingTower?.Tower_name || ''}
-                      required
-                    />
-                  </div>
-                </div>
-                <div className="modal-footer">
-                  <button type="button" className="btn btn-secondary" onClick={closeModal}>
-                    Cancelar
-                  </button>
-                  <button
-                    type="submit"
-                    className="btn btn-primary"
-                    disabled={createMutation.isLoading || updateMutation.isLoading}
-                  >
-                    {(createMutation.isLoading || updateMutation.isLoading) ? (
-                      <>
-                        <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
-                        Guardando...
-                      </>
-                    ) : (
-                      'Guardar'
-                    )}
-                  </button>
-                </div>
-              </form>
-            </div>
-          </div>
+      <DynamicModal
+        isOpen={showModal}
+        onClose={closeModal}
+        title={editingTower ? 'Editar Torre' : 'Añadir Torre'}
+        onSubmit={handleSubmit}
+        submitText={editingTower ? 'Actualizar' : 'Guardar'}
+        isSubmitting={createMutation.isLoading || updateMutation.isLoading}
+      >
+        <div className="mb-3">
+          <label htmlFor="tower_name" className="form-label">Nombre de la Torre</label>
+          <input
+            type="text"
+            className="form-control"
+            id="tower_name"
+            name="tower_name"
+            defaultValue={editingTower?.Tower_name || ''}
+            required
+          />
         </div>
-      )}
+      </DynamicModal>
     </div>
   );
 };

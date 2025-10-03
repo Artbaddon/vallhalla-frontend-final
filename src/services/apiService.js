@@ -430,6 +430,10 @@ export const visitorsAPI = {
     const response = await api.put(`/visitors/${id}`, data);
     return response.data;
   },
+  visitorExit: async (id) => {
+    const response = await api.put(`/visitors/${id}/exit`);
+    return response.data;
+  },
   delete: async (id) => {
     const response = await api.delete(`/visitors/${id}`);
     return response.data;

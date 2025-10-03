@@ -61,7 +61,7 @@ const Visitors = () => {
   );
 
   const updateExitMutation = useMutation(
-    ({ id, exitDate }) => visitorsAPI.update(id, { exit_date: exitDate }),
+    ({ id }) => visitorsAPI.visitorExit(id),
     {
       onSuccess: () => {
         queryClient.invalidateQueries('visitors');
@@ -246,7 +246,7 @@ const Visitors = () => {
           <p className="text-muted">Administre los visitantes del conjunto residencial</p>
         </div>
         <button 
-          className="btn btn-primary" 
+          className="btn btn-outline-primary" 
           onClick={handleCreate}
           disabled={isLoading}
         >

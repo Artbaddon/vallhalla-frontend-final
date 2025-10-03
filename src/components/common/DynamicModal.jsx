@@ -23,12 +23,12 @@ const DynamicModalComponent = ({
   onSubmit,
   submitText = 'Guardar',
   size = 'md', // sm, md, lg, xl
-  showFooter = true
+  showFooter = true,
+  isSubmitting = false,
 }) => {
-  if (!isOpen) return null;
-
   // Prevent background scroll when modal is open
   useEffect(() => {
+    if (!isOpen) return undefined;
     document.body.classList.add('modal-open');
     return () => {
       document.body.classList.remove('modal-open');
@@ -37,6 +37,7 @@ const DynamicModalComponent = ({
 
   // Close modal on escape key
   useEffect(() => {
+    if (!isOpen) return undefined;
     const handleEscapeKey = (e) => {
       if (e.key === 'Escape') {
         onClose();
@@ -46,7 +47,9 @@ const DynamicModalComponent = ({
     return () => {
       document.removeEventListener('keydown', handleEscapeKey);
     };
-  }, [onClose]);
+  }, [isOpen, onClose]);
+
+  if (!isOpen) return null;
 
   const handleBackdropClick = (e) => {
     if (e.target === e.currentTarget) {
@@ -57,7 +60,7 @@ const DynamicModalComponent = ({
   return (
     <div className="modal-overlay" onClick={handleBackdropClick}>
       <div className={`modal fade show`} style={{ display: 'block' }} tabIndex="-1">
-        <div className={`modal-dialog modal-${size}`}>
+        <div className={`modal-dialog modal-${size} modal-dialog-centered`}>
           <div className="modal-content">
             <div className="modal-header">
               <h5 className="modal-title">{title}</h5>
@@ -71,7 +74,18 @@ const DynamicModalComponent = ({
                     <button type="button" className="btn btn-secondary" onClick={onClose}>
                       Cancelar
                     </button>
-                    <button type="submit" className="btn btn-primary">
+                    <button
+                      type="submit"
+                      className="btn btn-primary"
+                      disabled={isSubmitting}
+                    >
+                      {isSubmitting && (
+                        <span
+                          className="spinner-border spinner-border-sm me-2"
+                          role="status"
+                          aria-hidden="true"
+                        ></span>
+                      )}
                       {submitText}
                     </button>
                   </div>
@@ -92,7 +106,6 @@ const DynamicModalComponent = ({
           </div>
         </div>
       </div>
-      <div className="modal-backdrop fade show"></div>
     </div>
   );
 };
@@ -105,7 +118,8 @@ DynamicModalComponent.propTypes = {
   onSubmit: PropTypes.func,
   submitText: PropTypes.string,
   size: PropTypes.oneOf(['sm', 'md', 'lg', 'xl']),
-  showFooter: PropTypes.bool
+  showFooter: PropTypes.bool,
+  isSubmitting: PropTypes.bool,
 };
 
 // Wrap the component with React.memo for better performance and static optimization

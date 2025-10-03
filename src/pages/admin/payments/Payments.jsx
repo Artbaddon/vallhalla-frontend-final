@@ -1,12 +1,22 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from 'react-query';
 import { paymentsAPI, ownersAPI } from '../../../services/api';
 import toast from 'react-hot-toast';
 import Swal from 'sweetalert2';
 import PaymentModal from './PaymentModal';
 import './Payments.css';
+import useFeatureAccess from '../../../hooks/useFeatureAccess';
+import { useAuth } from '../../../contexts/AuthContext';
 
 const Payments = () => {
+  const { can: paymentsCan, roleKey } = useFeatureAccess('payments');
+  const { user } = useAuth();
+  const canView = paymentsCan.canView;
+  const canCreate = paymentsCan.canCreate;
+  const canEdit = paymentsCan.canEdit;
+  const isAdminRole = roleKey === 'ADMIN';
+  const isOwnerRole = roleKey === 'OWNER';
+
   const [showModal, setShowModal] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
@@ -14,6 +24,7 @@ const Payments = () => {
 
   // Fetch payments data
   const { data: paymentsResponse, isLoading, error } = useQuery('payments', paymentsAPI.getAll, {
+    enabled: canView,
     onSuccess: (response) => {
       console.log('Payments data received:', response?.data);
     },
@@ -23,7 +34,9 @@ const Payments = () => {
   });
 
   // Fetch owners for bulk creation - try getDetails first, fallback to getAll
-  const { data: ownersResponse } = useQuery('owners', 
+  const shouldLoadOwners = canCreate && isAdminRole;
+  const { data: ownersResponse } = useQuery(
+    'owners', 
     async () => {
       try {
         // Try getDetails first (returns more complete data)
@@ -35,29 +48,52 @@ const Payments = () => {
         // Fallback to getAll
         return await ownersAPI.getAll();
       }
-    }, {
-    onSuccess: (data) => {
-      console.log('Owners API response in Payments:', data);
-      console.log('Owners data structure:', data?.data);
     },
-    onError: (err) => {
-      console.error('Error loading owners in Payments:', err);
+    {
+      enabled: shouldLoadOwners,
+      onSuccess: (data) => {
+        console.log('Owners API response in Payments:', data);
+        console.log('Owners data structure:', data?.data);
+      },
+      onError: (err) => {
+        console.error('Error loading owners in Payments:', err);
+      }
     }
-  });
+  );
   
   // Fallback owners for testing when API is empty
-  const fallbackOwners = [
+  const fallbackOwners = useMemo(() => [
     { Owner_id: 1, Owner_first_name: 'Juan', Owner_last_name: 'Pérez' },
     { Owner_id: 2, Owner_first_name: 'María', Owner_last_name: 'García' },
     { Owner_id: 3, Owner_first_name: 'Carlos', Owner_last_name: 'López' },
     { Owner_id: 4, Owner_first_name: 'Ana', Owner_last_name: 'Martínez' },
     { Owner_id: 5, Owner_first_name: 'Luis', Owner_last_name: 'Rodríguez' }
-  ];
+  ], []);
   
-  const ownersFromAPI = ownersResponse?.data || [];
-  const owners = ownersFromAPI.length > 0 ? ownersFromAPI : fallbackOwners;
-  console.log('Final owners array in Payments:', owners);
-  console.log('Using fallback owners?', ownersFromAPI.length === 0);
+  const owners = useMemo(() => {
+    if (!canCreate) {
+      return [];
+    }
+
+    if (shouldLoadOwners) {
+      const ownersFromAPI = ownersResponse?.data || [];
+      const resolvedOwners = ownersFromAPI.length > 0 ? ownersFromAPI : fallbackOwners;
+      console.log('Final owners array in Payments (admin path):', resolvedOwners);
+      console.log('Using fallback owners?', ownersFromAPI?.length === 0);
+      return resolvedOwners;
+    }
+
+    if (isOwnerRole) {
+      const ownerSelf = {
+        Owner_id: user?.userId ?? null,
+        Owner_first_name: user?.username ?? 'Mi',
+        Owner_last_name: 'Cuenta',
+      };
+      return ownerSelf.Owner_id != null ? [ownerSelf] : [];
+    }
+
+    return [];
+  }, [canCreate, fallbackOwners, isOwnerRole, shouldLoadOwners, user?.userId, user?.username, ownersResponse?.data]);
 
   // Ensure payments is always an array
   const payments = Array.isArray(paymentsResponse?.data) ? paymentsResponse.data : [];
@@ -118,10 +154,12 @@ const Payments = () => {
   });
 
   const handleCreate = () => {
+    if (!canCreate) return;
     setShowModal(true);
   };
 
   const handleChangeStatus = (payment) => {
+    if (!canEdit) return;
     const currentStatusId = payment.Payment_Status_ID_FK || payment.status_id || 1;
     const statusOptions = {
       1: 'Pendiente',
@@ -161,7 +199,7 @@ const Payments = () => {
         return parseInt(newStatusId);
       }
     }).then((result) => {
-      if (result.isConfirmed) {
+      if (result.isConfirmed && canEdit) {
         updateMutation.mutate({ 
           id: payment.payment_id || payment.id, 
           data: { status_id: result.value }
@@ -200,6 +238,8 @@ const Payments = () => {
   };
 
   const handleSubmit = async (formData) => {
+    if (!canCreate) return;
+
     if (formData.owner_id === 'all') {
       // Bulk creation for all owners
       if (!owners.length) {
@@ -250,6 +290,14 @@ const Payments = () => {
     );
   }
 
+  if (!canView) {
+    return (
+      <div className="alert alert-warning" role="alert">
+        No tienes permisos para visualizar esta sección.
+      </div>
+    );
+  }
+
   return (
     <div className="payments-page">
       <div className="page-header">
@@ -257,13 +305,15 @@ const Payments = () => {
           <h1>Gestión de Pagos</h1>
           <p className="text-muted">Administre los pagos y transacciones del conjunto</p>
         </div>
-        <button 
-          className="btn btn-primary" 
-          onClick={handleCreate}
-          disabled={isLoading}
-        >
-          <i className="bi bi-plus-lg"></i> Crear Pago
-        </button>
+        {canCreate && (
+          <button 
+            className="btn btn-outline-primary" 
+            onClick={handleCreate}
+            disabled={isLoading}
+          >
+            <i className="bi bi-plus-lg"></i> Crear Pago
+          </button>
+        )}
       </div>
 
       {/* Search and Filters */}
@@ -377,14 +427,16 @@ const Payments = () => {
                           >
                             <i className="bi bi-eye"></i>
                           </button>
-                          <button
-                            type="button"
-                            className="btn btn-outline-warning btn-sm"
-                            onClick={() => handleChangeStatus(payment)}
-                            title="Cambiar estado"
-                          >
-                            <i className="bi bi-arrow-repeat"></i>
-                          </button>
+                          {canEdit && (
+                            <button
+                              type="button"
+                              className="btn btn-outline-warning btn-sm"
+                              onClick={() => handleChangeStatus(payment)}
+                              title="Cambiar estado"
+                            >
+                              <i className="bi bi-arrow-repeat"></i>
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -398,7 +450,7 @@ const Payments = () => {
 
       {/* Payment Modal */}
       <PaymentModal
-        show={showModal}
+        show={showModal && canCreate}
         onHide={() => {
           setShowModal(false);
         }}
@@ -406,6 +458,8 @@ const Payments = () => {
         payment={null}
         isLoading={createMutation.isLoading}
         owners={owners}
+        allowBulk={shouldLoadOwners}
+        isOwnerRole={isOwnerRole}
       />
     </div>
   );

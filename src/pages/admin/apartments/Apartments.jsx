@@ -1,530 +1,646 @@
-import React, { useState } from 'react';
-import { useQuery, useMutation, useQueryClient } from 'react-query';
-import { apartmentsAPI, towersAPI, apartmentStatusAPI, ownersAPI } from '../../../services/apiService';
-import { toast } from 'react-hot-toast';
-import DynamicModal from '../../../components/common/DynamicModal';
+import React, { useMemo, useState } from 'react';
+import {
+  apartmentsAPI,
+  towersAPI,
+  apartmentStatusAPI,
+  ownersAPI,
+} from '../../../services/apiService';
+import {
+  AdminPageLayout,
+  ResourceToolbar,
+  DataTable,
+  DynamicModal,
+} from '../../../components/common';
+import useCrudResource from '../../../hooks/useCrudResource';
+import useArrayQuery from '../../../hooks/useArrayQuery';
 import './Apartments.css';
 
-/**
- * Apartments management component
- * Displays a list of apartments with filtering and CRUD operations
- */
+const getStatusBadgeColor = (statusName) => {
+  if (!statusName) return 'secondary';
+  switch (statusName.toLowerCase()) {
+    case 'available':
+    case 'disponible':
+      return 'success';
+    case 'occupied':
+    case 'ocupado':
+      return 'warning';
+    case 'maintenance':
+    case 'mantenimiento':
+      return 'danger';
+    default:
+      return 'secondary';
+  }
+};
+
+const normalizeStatusOptions = (items = []) => {
+  const array = Array.isArray(items) ? items : [];
+  const seen = new Set();
+  const normalized = [];
+
+  array.forEach((status, index) => {
+    const id =
+      status?.id ??
+      status?.status_id ??
+      status?.Apartment_status_id ??
+      status?.Apartment_status_FK_ID ??
+      null;
+    const baseName =
+      status?.name ??
+      status?.status_name ??
+      status?.Apartment_status_name ??
+      status?.Status_name ??
+      '';
+    const name =
+      baseName || (id != null ? `Estado ${id}` : `Estado ${index + 1}`);
+    const value = id != null ? String(id) : name;
+    const dedupeKey = value || name || String(index);
+
+    if (seen.has(dedupeKey)) {
+      return;
+    }
+
+    seen.add(dedupeKey);
+    normalized.push({ id, name, value });
+  });
+
+  return normalized;
+};
+
 const Apartments = () => {
-  // State
   const [searchTerm, setSearchTerm] = useState('');
   const [filterTower, setFilterTower] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
   const [modalConfig, setModalConfig] = useState({
     isOpen: false,
-    type: null, // 'view', 'edit', 'create'
-    data: null
+    type: null,
+    data: null,
   });
 
-  const queryClient = useQueryClient();
+  const handleCloseModal = () =>
+    setModalConfig({ isOpen: false, type: null, data: null });
 
-  // Helper function to safely extract data from API responses
-  const extractData = (response, dataKey = null) => {
-    if (!response) return [];
-    
-    // Case 1: Response is already an array
-    if (Array.isArray(response)) {
-      return response;
-    }
-    
-    // Case 2: Response has a data property that is an array
-    if (response.data && Array.isArray(response.data)) {
-      return response.data;
-    }
-    
-    // Case 3: Response has a specific key that contains an array
-    if (dataKey && response[dataKey] && Array.isArray(response[dataKey])) {
-      return response[dataKey];
-    }
-    
-    // Case 4: Response has a data property with a specific key that contains an array
-    if (dataKey && response.data && response.data[dataKey] && Array.isArray(response.data[dataKey])) {
-      return response.data[dataKey];
-    }
-    
-    // Default: Return empty array if no valid data structure is found
-    console.warn('Could not extract data from response:', response);
-    return [];
-  };
-
-  // Queries
-  const { 
-    data: apartmentsData = { apartments: [] }, 
-    isLoading: isLoadingApartments,
-    isError: isErrorApartments,
-    error: apartmentsError
-  } = useQuery('apartments', apartmentsAPI.getAll, {
-    onSuccess: (data) => {
-      console.log('Apartments response:', data);
-    },
-    onError: (error) => {
-      console.error('Error fetching apartments:', error);
-      toast.error(`Error al cargar apartamentos: ${error.message}`);
-    }
+  const apartmentsResource = useCrudResource({
+    queryKey: 'apartments',
+    fetcher: apartmentsAPI.getAll,
+    select: (response) => response?.apartments ?? [],
+    resourceLabel: { singular: 'apartamento', plural: 'apartamentos' },
+    createFn: apartmentsAPI.create,
+    updateFn: ({ id, data }) => apartmentsAPI.update(id, data),
+    deleteFn: apartmentsAPI.delete,
+    onCreateSuccess: handleCloseModal,
+    onUpdateSuccess: handleCloseModal,
   });
 
-  const { 
-    data: towersData = { data: [] }, 
-    isLoading: isLoadingTowers 
-  } = useQuery('towers', towersAPI.getAll, {
-    onSuccess: (data) => {
-      console.log('Towers response:', data);
-    },
-    onError: (error) => {
-      console.error('Error fetching towers:', error);
-      toast.error(`Error al cargar torres: ${error.message}`);
-    }
+  const towersQuery = useArrayQuery({
+    queryKey: ['apartments', 'towers'],
+    queryFn: towersAPI.getAll,
+    dataKey: 'data',
+    fallbackKeys: ['towers'],
+    resourceLabel: { plural: 'torres' },
+    transform: (items) =>
+      items.map((tower, index) => {
+        const id =
+          tower?.Tower_id ?? tower?.id ?? tower?.tower_id ?? null;
+        const baseName =
+          tower?.Tower_name ?? tower?.name ?? tower?.tower_name ?? '';
+        const name = baseName || (id != null ? `Torre ${id}` : `Torre ${index + 1}`);
+        const value = id != null ? String(id) : name;
+        return { id, name, value };
+      }),
   });
 
-  const { 
-    data: statusesData = { data: [] },
-    isLoading: isLoadingStatuses
-  } = useQuery('apartmentStatuses', apartmentStatusAPI.getAll, {
-    onSuccess: (data) => {
-      console.log('Apartment statuses response:', data);
-    },
-    onError: (error) => {
-      console.error('Error fetching apartment statuses:', error);
-      toast.error(`Error al cargar estados: ${error.message}`);
-    }
-  });
+  const statusesQuery = useArrayQuery({
+    queryKey: ['apartments', 'statuses'],
+    queryFn: apartmentStatusAPI.getAll,
+    resourceLabel: { plural: 'estados de apartamento' },
+    select: (response) => {
+      const candidates = [
+        response,
+        response?.data,
+        response?.statuses,
+        response?.status,
+        response?.apartmentStatuses,
+        response?.apartment_statuses,
+        response?.results,
+        response?.records,
+        response?.data?.data,
+        response?.data?.statuses,
+        response?.data?.status,
+        response?.data?.apartmentStatuses,
+        response?.data?.apartment_statuses,
+        response?.data?.results,
+        response?.data?.records,
+      ];
 
-  const { 
-    data: ownersData = { owners: [] } 
-  } = useQuery('owners', ownersAPI.getAll, {
-    onSuccess: (data) => {
-      console.log('Owners response:', data);
-    },
-    onError: (error) => {
-      console.error('Error fetching owners:', error);
-      toast.error(`Error al cargar propietarios: ${error.message}`);
-    }
-  });
-
-  // Extract data from API responses
-  const apartments = extractData(apartmentsData, 'apartments');
-  const towers = extractData(towersData, 'data');
-  const statuses = extractData(statusesData, 'data') || [];
-  const owners = extractData(ownersData, 'owners');
-
-  console.log('Extracted apartments:', apartments);
-  console.log('Extracted towers:', towers);
-  console.log('Extracted statuses:', statuses);
-  console.log('Extracted owners:', owners);
-
-  // Mutations
-  const createMutation = useMutation(apartmentsAPI.create, {
-    onSuccess: () => {
-      queryClient.invalidateQueries('apartments');
-      toast.success('Apartamento creado exitosamente');
-      handleCloseModal();
-    },
-    onError: (error) => {
-      toast.error(`Error al crear apartamento: ${error.message}`);
-    }
-  });
-
-  const updateMutation = useMutation(
-    ({ id, data }) => apartmentsAPI.update(id, data),
-    {
-      onSuccess: () => {
-        queryClient.invalidateQueries('apartments');
-        toast.success('Apartamento actualizado exitosamente');
-        handleCloseModal();
-      },
-      onError: (error) => {
-        toast.error(`Error al actualizar apartamento: ${error.message}`);
+      for (const candidate of candidates) {
+        if (Array.isArray(candidate)) {
+          return normalizeStatusOptions(candidate);
+        }
       }
-    }
-  );
 
-  const deleteMutation = useMutation(apartmentsAPI.delete, {
-    onSuccess: () => {
-      queryClient.invalidateQueries('apartments');
-      toast.success('Apartamento eliminado exitosamente');
+      if (response && typeof response === 'object') {
+        const nestedArray = Object.values(response).find((value) =>
+          Array.isArray(value),
+        );
+        if (Array.isArray(nestedArray)) {
+          return normalizeStatusOptions(nestedArray);
+        }
+      }
+
+      if (response?.data && typeof response.data === 'object') {
+        const nestedArray = Object.values(response.data).find((value) =>
+          Array.isArray(value),
+        );
+        if (Array.isArray(nestedArray)) {
+          return normalizeStatusOptions(nestedArray);
+        }
+      }
+
+      console.warn('apartments: no apartment statuses found in response', response);
+      return [];
     },
-    onError: (error) => {
-      toast.error(`Error al eliminar apartamento: ${error.message}`);
-    }
   });
 
-  // Helper function to get status badge color
-  const getStatusBadgeColor = (statusName) => {
-    if (!statusName) return 'secondary';
-    
-    switch(statusName.toLowerCase()) {
-      case 'available':
-      case 'disponible':
-        return 'success';
-      case 'occupied':
-      case 'ocupado':
-        return 'warning';
-      case 'maintenance':
-      case 'mantenimiento':
-        return 'danger';
-      default:
-        return 'secondary';
-    }
-  };
+  const ownersQuery = useArrayQuery({
+    queryKey: ['apartments', 'owners'],
+    queryFn: ownersAPI.getDetails,
+    dataKey: 'owners',
+    fallbackKeys: ['data'],
+    resourceLabel: { plural: 'propietarios' },
+    transform: (items) =>
+      items.map((owner, index) => {
+        const id = owner?.Owner_id ?? owner?.id ?? owner?.owner_id ?? null;
+        const rawFirst = owner?.Owner_first_name ?? owner?.first_name ?? '';
+        const rawLast = owner?.Owner_last_name ?? owner?.last_name ?? '';
+        const normalizedFullName = (owner?.Profile_fullName ?? owner?.fullName ?? '')
+          .toString()
+          .trim();
 
-  // Filter apartments based on search term and filters
-  const filteredApartments = apartments.filter(apartment => {
-    const matchesSearch = !searchTerm || 
-      (apartment.Apartment_number && apartment.Apartment_number.toLowerCase().includes(searchTerm.toLowerCase()));
-    const matchesTower = !filterTower || apartment.Tower_FK_ID === parseInt(filterTower);
-    const matchesStatus = !filterStatus || apartment.Apartment_status_FK_ID === parseInt(filterStatus);
-    return matchesSearch && matchesTower && matchesStatus;
+        let derivedFirst = '';
+        let derivedLast = '';
+        if (normalizedFullName) {
+          const parts = normalizedFullName.split(/\s+/);
+          derivedFirst = parts.shift() || '';
+          derivedLast = parts.join(' ');
+        }
+
+        const firstName = (rawFirst || derivedFirst).trim();
+        const lastName = (rawLast || derivedLast).trim();
+        const fullName =
+          normalizedFullName || [firstName, lastName].filter(Boolean).join(' ');
+
+        const fallbackName =
+          owner?.Users_name ?? owner?.username ?? owner?.name ?? '';
+        const email = owner?.Users_email ?? owner?.Owner_email ?? owner?.email ?? '';
+
+        const name = fullName || fallbackName || email || `Propietario ${id ?? index + 1}`;
+        const value = id != null ? String(id) : name;
+
+        return {
+          id,
+          name,
+          value,
+          firstName,
+          lastName,
+          fullName,
+        };
+      }),
   });
 
-  // Modal handlers
-  const handleView = (apartment) => {
-    setModalConfig({
-      isOpen: true,
-      type: 'view',
-      data: apartment
-    });
-  };
+  const apartments = useMemo(
+    () => apartmentsResource.items ?? [],
+    [apartmentsResource.items],
+  );
+  const towers = towersQuery.items ?? [];
+  const statuses = statusesQuery.items ?? [];
+  const owners = ownersQuery.items ?? [];
 
-  const handleEdit = (apartment) => {
-    setModalConfig({
-      isOpen: true,
-      type: 'edit',
-      data: apartment
-    });
-  };
+  const isLoading =
+    apartmentsResource.isLoading ||
+    towersQuery.isLoading ||
+    statusesQuery.isLoading ||
+    ownersQuery.isLoading;
 
-  const handleCreate = () => {
-    setModalConfig({
-      isOpen: true,
-      type: 'create',
-      data: null
+  const filteredApartments = useMemo(() => {
+    const search = searchTerm.trim().toLowerCase();
+    return apartments.filter((apartment) => {
+      const matchesSearch =
+        !search ||
+        (apartment.Apartment_number || '')
+          .toString()
+          .toLowerCase()
+          .includes(search);
+      const matchesTower =
+        !filterTower || String(apartment.Tower_FK_ID) === filterTower;
+      const matchesStatus =
+        !filterStatus || String(apartment.Apartment_status_FK_ID) === filterStatus;
+      return matchesSearch && matchesTower && matchesStatus;
     });
-  };
+  }, [apartments, filterStatus, filterTower, searchTerm]);
 
-  const handleCloseModal = () => {
-    setModalConfig({
-      isOpen: false,
-      type: null,
-      data: null
-    });
-  };
+  const handleCreate = () =>
+    setModalConfig({ isOpen: true, type: 'create', data: null });
+
+  const handleView = (apartment) =>
+    setModalConfig({ isOpen: true, type: 'view', data: apartment });
+
+  const handleEdit = (apartment) =>
+    setModalConfig({ isOpen: true, type: 'edit', data: apartment });
 
   const handleDelete = async (id) => {
     if (window.confirm('¿Está seguro de que desea eliminar este apartamento?')) {
-      await deleteMutation.mutateAsync(id);
+      await apartmentsResource.remove(id);
     }
   };
 
-  // Form submission handler
   const handleSubmit = async (event) => {
     event.preventDefault();
     const formData = new FormData(event.target);
-    
-    const data = {
-      apartment_number: formData.get('apartment_number'),
-      tower_id: parseInt(formData.get('tower_id')),
-      status_id: parseInt(formData.get('status_id')),
-      owner_id: parseInt(formData.get('owner_id'))
+    const normalizeNumericField = (value) => {
+      const trimmed = (value ?? '').toString().trim();
+      if (!trimmed) return null;
+      const parsed = Number(trimmed);
+      return Number.isNaN(parsed) ? null : parsed;
     };
+    const assignWithAliases = (target, key, value, aliases = []) => {
+      if (value == null || (typeof value === 'string' && value.trim() === '')) {
+        target[key] = null;
+        return;
+      }
+
+      target[key] = value;
+      aliases.forEach((alias) => {
+        target[alias] = value;
+      });
+    };
+
+    const rawApartmentNumber = (formData.get('apartment_number') ?? '').toString().trim();
+    const apartmentNumber = (() => {
+      if (!rawApartmentNumber) return '';
+      const numeric = Number(rawApartmentNumber);
+      return Number.isNaN(numeric) ? rawApartmentNumber : numeric;
+    })();
+
+    const towerId = normalizeNumericField(formData.get('tower_id'));
+    const statusId = normalizeNumericField(formData.get('status_id'));
+    const ownerId = normalizeNumericField(formData.get('owner_id'));
+
+    const payload = {};
+
+    assignWithAliases(payload, 'apartment_number', apartmentNumber, [
+      'Apartment_number',
+      'apartmentNumber',
+    ]);
+    assignWithAliases(payload, 'tower_id', towerId, [
+      'Tower_FK_ID',
+      'tower_fk_id',
+      'towerId',
+      'towerFkId',
+    ]);
+    assignWithAliases(payload, 'status_id', statusId, [
+      'Apartment_status_id',
+      'Apartment_status_FK_ID',
+      'apartment_status_id',
+      'apartment_status_fk_id',
+      'status_fk_id',
+      'statusId',
+    ]);
+    assignWithAliases(payload, 'owner_id', ownerId, [
+      'Owner_FK_ID',
+      'owner_fk_id',
+      'ownerId',
+    ]);
+
+    if (import.meta.env.DEV) {
+      // Helps diagnose unexpected payload transformations during development.
+      console.debug('Apartments: submitting payload', payload);
+    }
 
     try {
       if (modalConfig.type === 'edit') {
-        await updateMutation.mutateAsync({
-          id: modalConfig.data.Apartment_id,
-          data
+        await apartmentsResource.update({
+          id: modalConfig.data?.Apartment_id,
+          data: payload,
         });
       } else {
-        await createMutation.mutateAsync(data);
+        await apartmentsResource.create(payload);
       }
     } catch (error) {
-      console.error('Form submission error:', error);
+      const apiMessage = error?.response?.data || error?.message;
+      console.error('Error al guardar apartamento', error, apiMessage);
     }
   };
 
-  // Modal content renderer
   const renderModalContent = () => {
     const { type, data } = modalConfig;
 
-    switch (type) {
-      case 'view':
-        return (
-          <div className="apartment-details">
-            <div className="mb-3">
-              <label className="form-label fw-bold">Número:</label>
-              <p>{data?.Apartment_number}</p>
-            </div>
-            <div className="mb-3">
-              <label className="form-label fw-bold">Torre:</label>
-              <p>{data?.Tower_name || 'N/A'}</p>
-            </div>
-            <div className="mb-3">
-              <label className="form-label fw-bold">Estado:</label>
-              <p>
-                <span className={`badge bg-${getStatusBadgeColor(data?.Apartment_status_name)}`}>
-                  {data?.Apartment_status_name || 'N/A'}
-                </span>
-              </p>
-            </div>
-            <div className="mb-3">
-              <label className="form-label fw-bold">Propietario:</label>
-              <p>{data?.owner_name || 'N/A'}</p>
-            </div>
+    if (type === 'view') {
+      return (
+        <div className="apartment-details">
+          <div className="mb-3">
+            <label className="form-label fw-bold">Número:</label>
+            <p>{data?.Apartment_number ?? 'N/A'}</p>
           </div>
-        );
-
-      case 'edit':
-      case 'create':
-        return (
-          <>
-            <div className="mb-3">
-              <label htmlFor="apartment_number" className="form-label">Número de Apartamento</label>
-              <input
-                type="text"
-                className="form-control"
-                id="apartment_number"
-                name="apartment_number"
-                defaultValue={data?.Apartment_number || ''}
-                required
-              />
-            </div>
-            <div className="mb-3">
-              <label htmlFor="tower_id" className="form-label">Torre</label>
-              <select
-                className="form-select"
-                id="tower_id"
-                name="tower_id"
-                defaultValue={data?.Tower_FK_ID || ''}
-                required
+          <div className="mb-3">
+            <label className="form-label fw-bold">Torre:</label>
+            <p>{data?.Tower_name ?? 'N/A'}</p>
+          </div>
+          <div className="mb-3">
+            <label className="form-label fw-bold">Estado:</label>
+            <p>
+              <span
+                className={`badge bg-${getStatusBadgeColor(
+                  data?.Apartment_status_name,
+                )}`}
               >
-                <option value="">Seleccione una torre</option>
-                {towers.map((tower, index) => (
-                  <option key={`tower-${tower.id || index}`} value={tower.id}>
-                    {tower.Tower_name}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="mb-3">
-              <label htmlFor="status_id" className="form-label">Estado</label>
-              <select
-                className="form-select"
-                id="status_id"
-                name="status_id"
-                defaultValue={data?.Apartment_status_FK_ID || ''}
-                required
-              >
-                <option value="">Seleccione un estado</option>
-                {statuses.map((status, index) => (
-                  <option key={`status-${status.id || index}`} value={status.id}>
-                    {status.name || status.status_name}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="mb-3">
-              <label htmlFor="owner_id" className="form-label">Propietario</label>
-              <select
-                className="form-select"
-                id="owner_id"
-                name="owner_id"
-                defaultValue={data?.Owner_FK_ID || ''}
-                required
-              >
-                <option value="">Seleccione un propietario</option>
-                {owners.map((owner, index) => (
-                  <option key={`owner-${owner.id || index}`} value={owner.id}>
-                    {`${owner.first_name} ${owner.last_name}`}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </>
-        );
-
-      default:
-        return null;
+                {data?.Apartment_status_name ?? 'N/A'}
+              </span>
+            </p>
+          </div>
+          <div className="mb-0">
+            <label className="form-label fw-bold">Propietario:</label>
+            <p>{data?.owner_name ?? 'N/A'}</p>
+          </div>
+        </div>
+      );
     }
+
+    return (
+      <>
+        <div className="mb-3">
+          <label htmlFor="apartment_number" className="form-label">
+            Número de Apartamento
+          </label>
+          <input
+            id="apartment_number"
+            name="apartment_number"
+            type="text"
+            className="form-control"
+            defaultValue={modalConfig.data?.Apartment_number ?? ''}
+            required
+          />
+        </div>
+        <div className="mb-3">
+          <label htmlFor="tower_id" className="form-label">
+            Torre
+          </label>
+          <select
+            id="tower_id"
+            name="tower_id"
+            className="form-select"
+            defaultValue={
+              modalConfig.data?.Tower_FK_ID != null
+                ? String(modalConfig.data.Tower_FK_ID)
+                : ''
+            }
+            disabled={towersQuery.isLoading && !towers.length}
+          >
+            <option value="">Seleccione una torre</option>
+            {towers.map((tower) => (
+              <option
+                key={`tower-${tower.id ?? tower.value ?? tower.name}`}
+                value={tower.value}
+              >
+                {tower.name}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="mb-3">
+          <label htmlFor="status_id" className="form-label">
+            Estado
+          </label>
+          <select
+            id="status_id"
+            name="status_id"
+            className="form-select"
+            defaultValue={
+              modalConfig.data?.Apartment_status_FK_ID != null
+                ? String(modalConfig.data.Apartment_status_FK_ID)
+                : ''
+            }
+            disabled={statusesQuery.isLoading && !statuses.length}
+          >
+            <option value="">Seleccione un estado</option>
+            {statuses.map((status) => (
+              <option
+                key={`status-${status.id ?? status.value ?? status.name}`}
+                value={status.value}
+              >
+                {status.name}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="mb-0">
+          <label htmlFor="owner_id" className="form-label">
+            Propietario
+          </label>
+          <select
+            id="owner_id"
+            name="owner_id"
+            className="form-select"
+            defaultValue={
+              modalConfig.data?.Owner_FK_ID != null
+                ? String(modalConfig.data.Owner_FK_ID)
+                : ''
+            }
+            disabled={ownersQuery.isLoading && !owners.length}
+          >
+            <option value="">Seleccione un propietario</option>
+            {owners.map((owner) => (
+              <option
+                key={`owner-${owner.id ?? owner.value ?? owner.name}`}
+                value={owner.value}
+              >
+                {owner.name}
+              </option>
+            ))}
+          </select>
+        </div>
+      </>
+    );
   };
 
-  // Loading state
-  if (isLoadingApartments || isLoadingTowers || isLoadingStatuses) {
-    return (
-      <div className="d-flex justify-content-center align-items-center" style={{ height: '70vh' }}>
-        <div className="spinner-border text-primary" role="status">
-          <span className="visually-hidden">Cargando...</span>
+  const columns = [
+    {
+      key: 'Apartment_number',
+      header: 'Número',
+      render: (apartment) => apartment.Apartment_number ?? 'N/A',
+    },
+    {
+      key: 'Tower_name',
+      header: 'Torre',
+      render: (apartment) => apartment.Tower_name ?? 'N/A',
+    },
+    {
+      key: 'Apartment_status_name',
+      header: 'Estado',
+      render: (apartment) => (
+        <span
+          className={`badge bg-${getStatusBadgeColor(
+            apartment.Apartment_status_name,
+          )}`}
+        >
+          {apartment.Apartment_status_name ?? 'N/A'}
+        </span>
+      ),
+    },
+    {
+      key: 'owner_name',
+      header: 'Propietario',
+      render: (apartment) => apartment.owner_name ?? 'N/A',
+    },
+    {
+      key: 'actions',
+      header: 'Acciones',
+      headerClassName: 'text-end',
+      cellClassName: 'text-end',
+      render: (apartment) => (
+        <div className="btn-group btn-group-sm" role="group">
+          <button
+            type="button"
+            className="btn btn-outline-primary"
+            onClick={() => handleView(apartment)}
+            title="Ver detalles"
+          >
+            <i className="bi bi-eye"></i>
+          </button>
+          <button
+            type="button"
+            className="btn btn-outline-info"
+            onClick={() => handleEdit(apartment)}
+            title="Editar"
+          >
+            <i className="bi bi-pencil"></i>
+          </button>
+          <button
+            type="button"
+            className="btn btn-outline-danger"
+            onClick={() => handleDelete(apartment.Apartment_id)}
+            disabled={apartmentsResource.mutations.delete.isLoading}
+            title="Eliminar"
+          >
+            <i className="bi bi-trash"></i>
+          </button>
         </div>
-      </div>
-    );
-  }
+      ),
+    },
+  ];
 
-  // Error state
-  if (isErrorApartments) {
-    return (
-      <div className="alert alert-danger" role="alert">
-        Error al cargar los datos: {apartmentsError.message}
-      </div>
-    );
-  }
+  const modalType = modalConfig.type;
+  const modalTitle =
+    modalType === 'view'
+      ? 'Detalles del Apartamento'
+      : modalType === 'edit'
+      ? 'Editar Apartamento'
+      : 'Nuevo Apartamento';
+  const modalSubmitText =
+    modalType === 'edit' ? 'Actualizar' : 'Crear';
+  const isSubmitting =
+    modalType === 'edit'
+      ? apartmentsResource.mutations.update.isLoading
+      : apartmentsResource.mutations.create.isLoading;
 
   return (
-    <div className="apartments-container">
-      <div className="d-flex justify-content-between align-items-center mb-4">
-        <div>
-          <h1 className="h3 mb-0">Gestión de Apartamentos</h1>
-          <p className="text-muted">Administre los apartamentos del conjunto residencial</p>
-        </div>
-        <button 
-          className="btn btn-primary" 
+    <AdminPageLayout
+      title="Gestión de Apartamentos"
+      description="Administre los apartamentos del conjunto residencial"
+      actions={
+        <button
+          type="button"
+          className="btn btn-outline-primary"
           onClick={handleCreate}
-          disabled={createMutation.isLoading}
+          disabled={apartmentsResource.mutations.create.isLoading}
         >
           <i className="bi bi-plus-circle me-1"></i>
           Nuevo Apartamento
         </button>
-      </div>
+      }
+    >
+      <ResourceToolbar
+        search={{
+          id: 'apartment-search',
+          label: 'Buscar',
+          placeholder: 'Buscar por número...',
+          value: searchTerm,
+          icon: 'bi-search',
+          onChange: setSearchTerm,
+        }}
+        filters={[
+          {
+            id: 'tower-filter',
+            label: 'Filtrar por Torre',
+            value: filterTower,
+            placeholder: 'Todas las torres',
+            icon: 'bi-building',
 
-      {/* Filters */}
-      <div className="card mb-4">
-        <div className="card-body">
-          <div className="row g-3">
-            <div className="col-md-4">
-              <label htmlFor="tower-filter" className="form-label">Filtrar por Torre</label>
-              <select
-                id="tower-filter"
-                className="form-select"
-                value={filterTower}
-                onChange={(e) => setFilterTower(e.target.value)}
-              >
-                <option value="">Todas las torres</option>
-                {towers.map((tower, index) => (
-                  <option key={`tower-filter-${tower.id}-${index}`} value={tower.id}>
-                    {tower.Tower_name}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="col-md-4">
-              <label htmlFor="status-filter" className="form-label">Filtrar por Estado</label>
-              <select
-                id="status-filter"
-                className="form-select"
-                value={filterStatus}
-                onChange={(e) => setFilterStatus(e.target.value)}
-              >
-                <option value="">Todos los estados</option>
-                {statuses.map((status, index) => (
-                  <option key={`status-filter-${status.id}-${index}`} value={status.id}>
-                    {status.name || status.status_name}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="col-md-4">
-              <label htmlFor="search-apartment" className="form-label">Buscar</label>
-              <input
-                id="search-apartment"
-                type="text"
-                className="form-control"
-                placeholder="Buscar por número..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-              />
-            </div>
-          </div>
-        </div>
-      </div>
+            onChange: setFilterTower,
+            allowClear: true,
+            options: towers.map((tower) => ({
+              value: tower.id != null ? String(tower.id) : tower.value,
+              label: tower.name,
+            })),
+          },
+          {
+            id: 'status-filter',
+            label: 'Filtrar por Estado',
+            value: filterStatus,
+            placeholder: 'Todos los estados',
+            icon: 'bi-funnel',
+            onChange: setFilterStatus,
+            allowClear: true,
+            options: statuses.map((status) => ({
+              value: status.id != null ? String(status.id) : status.value,
+              label: status.name,
+            })),
+          },
+        ]}
+      />
 
-      {/* Results */}
-      {filteredApartments.length > 0 ? (
-        <div className="card">
-          <div className="table-responsive">
-            <table className="table table-hover align-middle mb-0">
-              <thead className="table-light">
-                <tr>
-                  <th>Número</th>
-                  <th>Torre</th>
-                  <th>Estado</th>
-                  <th>Propietario</th>
-                  <th className="text-end">Acciones</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredApartments.map((apartment, index) => (
-                  <tr key={`apartment-${apartment.Apartment_id}-${index}`}>
-                    <td>{apartment.Apartment_number}</td>
-                    <td>{apartment.Tower_name || 'N/A'}</td>
-                    <td>
-                      <span className={`badge bg-${getStatusBadgeColor(apartment.Apartment_status_name)}`}>
-                        {apartment.Apartment_status_name || 'N/A'}
-                      </span>
-                    </td>
-                    <td>{apartment.owner_name || 'N/A'}</td>
-                    <td className="text-end">
-                      <div className="btn-group btn-group-sm">
-                        <button
-                          className="btn btn-outline-info"
-                          onClick={() => handleView(apartment)}
-                          title="Ver detalles"
-                        >
-                          <i className="bi bi-eye"></i>
-                        </button>
-                        <button
-                          className="btn btn-outline-primary"
-                          onClick={() => handleEdit(apartment)}
-                          title="Editar"
-                        >
-                          <i className="bi bi-pencil"></i>
-                        </button>
-                        <button
-                          className="btn btn-outline-danger"
-                          onClick={() => handleDelete(apartment.Apartment_id)}
-                          disabled={deleteMutation.isLoading}
-                          title="Eliminar"
-                        >
-                          <i className="bi bi-trash"></i>
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      ) : (
-        <div className="alert alert-info">
-          No se encontraron apartamentos que coincidan con los criterios de búsqueda.
+      {apartmentsResource.isError && (
+        <div className="alert alert-danger" role="alert">
+          Error al cargar los apartamentos: {apartmentsResource.error?.message}
         </div>
       )}
 
-      {/* Modal */}
+      <div className="card">
+        <div className="card-body">
+          <div className="d-flex justify-content-between align-items-center mb-3">
+            <h3 className="h5 mb-0">Lista de Apartamentos</h3>
+            <span className="badge bg-primary">
+              {filteredApartments.length} apartamentos
+            </span>
+          </div>
+          <DataTable
+            columns={columns}
+            data={filteredApartments}
+            isLoading={isLoading}
+            loadingMessage="Cargando apartamentos..."
+            emptyMessage={
+              searchTerm || filterTower || filterStatus
+                ? 'No se encontraron apartamentos con esos criterios'
+                : 'No hay apartamentos registrados'
+            }
+            rowKey={(item, index) => item?.Apartment_id ?? index}
+          />
+        </div>
+      </div>
+
       <DynamicModal
         isOpen={modalConfig.isOpen}
         onClose={handleCloseModal}
-        title={
-          modalConfig.type === 'view' ? 'Detalles del Apartamento' :
-          modalConfig.type === 'edit' ? 'Editar Apartamento' :
-          'Nuevo Apartamento'
-        }
-        onSubmit={modalConfig.type !== 'view' ? handleSubmit : undefined}
-        submitText={
-          createMutation.isLoading || updateMutation.isLoading 
-            ? 'Guardando...' 
-            : modalConfig.type === 'edit' 
-              ? 'Actualizar' 
-              : 'Crear'
-        }
-        showFooter={true}
+        title={modalTitle}
+        onSubmit={modalType === 'view' ? undefined : handleSubmit}
+        submitText={isSubmitting ? 'Guardando...' : modalSubmitText}
         size="lg"
+        showFooter={modalType !== 'view'}
+        isSubmitting={isSubmitting}
       >
         {renderModalContent()}
       </DynamicModal>
-    </div>
+    </AdminPageLayout>
   );
 };
 
-export default Apartments; 
+export default Apartments;

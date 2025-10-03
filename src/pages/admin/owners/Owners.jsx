@@ -1,16 +1,31 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "react-query";
-import { ownersAPI } from "../../../services/api";
+import { ownersAPI, towersAPI, apartmentsAPI } from "../../../services/api";
 import toast from "react-hot-toast";
 import Swal from "sweetalert2";
 import OwnerModal from "./OwnerModal";
 import "./Owners.css";
+import useArrayQuery from "../../../hooks/useArrayQuery";
 
 const Owners = () => {
   const [showModal, setShowModal] = useState(false);
   const [editingOwner, setEditingOwner] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
   const queryClient = useQueryClient();
+
+  const towersQuery = useArrayQuery({
+    queryKey: ["owners", "towers"],
+    queryFn: towersAPI.getAll,
+    dataKey: "data",
+    resourceLabel: { plural: "torres" },
+  });
+
+  const apartmentsQuery = useArrayQuery({
+    queryKey: ["owners", "apartments"],
+    queryFn: apartmentsAPI.getAll,
+    dataKey: "apartments",
+    resourceLabel: { plural: "apartamentos" },
+  });
 
   // Fetch raw owners data (backend format)
   const {
@@ -28,26 +43,110 @@ const Owners = () => {
 
   // Mapea el array crudo a un formato limpio y consistente para frontend
   const owners = useMemo(() => {
-    return ownersRaw.map((owner) => ({
-      id: owner.Owner_id,
-      userId: owner.User_FK_ID,
-      isTenant: Boolean(owner.Owner_is_tenant),
-      birthDate: owner.Owner_birth_date,
-      createdAt: owner.Owner_createdAt,
-      updatedAt: owner.Owner_updatedAt,
-      username: owner.Users_name,
-      userStatusId: owner.User_status_FK_ID,
-      userStatusName: owner.User_status_name,
-      fullName: owner.Profile_fullName,
-      firstName: owner.Owner_first_name || "", // Si vienen separados
-      lastName: owner.Owner_last_name || "",
-      email: owner.Owner_email || "",
-      phone: owner.Owner_phone || "",
-      documentType: owner.Profile_document_type || "",
-      documentNumber: owner.Profile_document_number || "",
-      // Puedes agregar más campos según necesites
-    }));
+    return ownersRaw.map((owner) => {
+      const rawFirst = owner.Owner_first_name || owner.first_name || "";
+      const rawLast = owner.Owner_last_name || owner.last_name || "";
+      const normalizedFullName = (owner.Profile_fullName || "").trim();
+
+      let derivedFirst = "";
+      let derivedLast = "";
+
+      if (normalizedFullName) {
+        const parts = normalizedFullName.split(/\s+/);
+        derivedFirst = parts.shift() || "";
+        derivedLast = parts.join(" ");
+      }
+
+      const firstName = (rawFirst || derivedFirst).trim();
+      const lastName = (rawLast || derivedLast).trim();
+      const fullName = normalizedFullName || [firstName, lastName].filter(Boolean).join(" ");
+
+      const towerId =
+        owner.Tower_FK_ID ?? owner.tower_id ?? owner.Tower_id ?? null;
+      const towerName = owner.Tower_name || owner.tower_name || owner.tower || "";
+      const apartmentId =
+        owner.Apartment_FK_ID ?? owner.apartment_id ?? owner.Apartment_id ?? null;
+      const apartmentNumber =
+        owner.Apartment_number || owner.apartment_number || owner.apartment || "";
+
+      return {
+        id: owner.Owner_id,
+        userId: owner.User_FK_ID,
+        isTenant: Boolean(owner.Owner_is_tenant),
+        birthDate: owner.Owner_birth_date,
+        createdAt: owner.Owner_createdAt,
+        updatedAt: owner.Owner_updatedAt,
+        username: owner.Users_name,
+        userStatusId: owner.User_status_FK_ID,
+        userStatusName: owner.User_status_name,
+        roleId: owner.Role_FK_ID ?? owner.role_id ?? null,
+        fullName,
+        firstName,
+        lastName,
+        email:
+          owner.Users_email ||
+          owner.Owner_email ||
+          owner.email ||
+          owner.Profile_email ||
+          "",
+        phone:
+          owner.Profile_telephone_number ||
+          owner.Owner_phone ||
+          owner.phone ||
+          "",
+        documentType: owner.Profile_document_type || "",
+        documentNumber: owner.Profile_document_number || "",
+        tower: towerName,
+        towerId,
+        apartment: apartmentNumber,
+        apartmentId,
+      };
+    });
   }, [ownersRaw]);
+
+  const towers = useMemo(() => {
+    return (towersQuery.items || [])
+      .map((tower) => {
+        const id = tower.Tower_id ?? tower.id ?? null;
+        const name = tower.Tower_name ?? tower.name ?? "";
+        if (!name) return null;
+        const value = id != null ? String(id) : name;
+        return { id, name, value };
+      })
+      .filter(Boolean);
+  }, [towersQuery.items]);
+
+  const apartments = useMemo(() => {
+    return (apartmentsQuery.items || [])
+      .map((apartment) => {
+        const id = apartment.Apartment_id ?? apartment.id ?? null;
+        const number = apartment.Apartment_number ?? apartment.number ?? "";
+        if (!number) return null;
+        const towerId =
+          apartment.Tower_FK_ID ??
+          apartment.tower_id ??
+          apartment.Tower_id ??
+          null;
+        const towerName = apartment.Tower_name ?? apartment.towerName ?? "";
+        const value = id != null ? String(id) : String(number);
+        const towerValue = towerId != null ? String(towerId) : towerName;
+        return {
+          id,
+          number,
+          value,
+          towerId,
+          towerName,
+          towerValue,
+        };
+      })
+      .filter(Boolean);
+  }, [apartmentsQuery.items]);
+
+  const isReferenceLoading =
+    towersQuery.isLoading ||
+    apartmentsQuery.isLoading ||
+    towersQuery.isFetching ||
+    apartmentsQuery.isFetching;
 
   // Filtra sobre el array ya mapeado
   const filteredOwners = useMemo(() => {
@@ -288,7 +387,7 @@ const Owners = () => {
                           </button>
                           <button
                             type="button"
-                            className="btn btn-outline-secondary btn-sm"
+                            className="btn btn-outline-info btn-sm"
                             onClick={() => handleEdit(owner)}
                             title="Editar"
                           >
@@ -323,6 +422,9 @@ const Owners = () => {
         onSubmit={handleSubmit}
         owner={editingOwner}
         isLoading={createMutation.isLoading || updateMutation.isLoading}
+        towers={towers}
+        apartments={apartments}
+        referenceLoading={isReferenceLoading}
       />
     </div>
   );

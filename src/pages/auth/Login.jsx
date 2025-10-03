@@ -1,13 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
+import { getDefaultPathForRole } from '../../constants/navigationConfig';
 import { useForm } from 'react-hook-form';
 import toast from 'react-hot-toast';
 import './Login.css';
 
 const Login = () => {
   const [isLoading, setIsLoading] = useState(false);
-  const { login, isAuthenticated, isAdmin, isOwner, isSecurity } = useAuth();
+  const { login, isAuthenticated, user } = useAuth();
   const navigate = useNavigate();
   
   const {
@@ -19,28 +20,17 @@ const Login = () => {
   // Redirect if already authenticated
   useEffect(() => {
     if (isAuthenticated) {
-      redirectBasedOnRole();
+      const targetPath = getDefaultPathForRole(user?.roleId) ?? '/';
+      navigate(targetPath, { replace: true });
     }
-  }, [isAuthenticated]);
-
-  const redirectBasedOnRole = () => {
-    if (isAdmin) {
-      navigate('/admin');
-    } else if (isOwner) {
-      navigate('/owner/dashboard');
-    } else if (isSecurity) {
-      navigate('/guard/dashboard');
-    } else {
-      navigate('/');
-    }
-  };
+  }, [isAuthenticated, navigate, user?.roleId]);
 
   const onSubmit = async (data) => {
     setIsLoading(true);
     try {
       const result = await login(data.username, data.password);
       if (result.success) {
-        // Redirect will be handled by the useEffect
+        // Redirection handled by the authenticated effect
       }
     } catch (error) {
       console.error('Login error:', error);

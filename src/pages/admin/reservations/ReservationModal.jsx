@@ -243,8 +243,6 @@ const ReservationModal = ({
 
   const isViewMode = mode === 'view';
   const isEditMode = mode === 'edit';
-  const isCreateMode = mode === 'create';
-
   const modalTitle = isViewMode ? 'Ver Reserva' : isEditMode ? 'Editar Reserva' : 'Nueva Reserva';
 
   return (

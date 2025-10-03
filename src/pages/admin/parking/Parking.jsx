@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { parkingAPI, vehicleTypesAPI, ownersAPI } from '../../../services/api';
+import useFeatureAccess from '../../../hooks/useFeatureAccess';
 import ParkingModal from './ParkingModal';
 import './Parking.css';
 
@@ -108,6 +109,12 @@ const AssignModal = ({ show, parking, owners, onClose, onSubmit }) => {
 };
 
 const Parking = () => {
+  const { can: parkingCan } = useFeatureAccess('parking');
+  const canCreate = parkingCan.canCreate;
+  const canEdit = parkingCan.canEdit;
+  const canDelete = parkingCan.canDelete;
+  const canAssign = canEdit || canCreate;
+
   const [parkingSpots, setParkingSpots] = useState([]);
   const [vehicleTypes, setVehicleTypes] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -122,41 +129,46 @@ const Parking = () => {
   const [showAssignModal, setShowAssignModal] = useState(false);
   const [assigningParking, setAssigningParking] = useState(null);
 
-  useEffect(() => {
-    loadData();
-  }, []);
-
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     try {
       setLoading(true);
-      const [parkingResponse, vehicleTypesResponse, ownersResponse] = await Promise.all([
-        parkingAPI.getAll(),
-        vehicleTypesAPI.getAll(),
-        ownersAPI.getDetails()
-      ]);
+      const requests = [parkingAPI.getAll(), vehicleTypesAPI.getAll()];
+      if (canAssign) {
+        requests.push(ownersAPI.getDetails());
+      }
+
+      const [parkingResponse, vehicleTypesResponse, ownersResponse] = await Promise.all(requests);
 
       console.log('Parking data received:', parkingResponse);
       console.log('Vehicle types received:', vehicleTypesResponse);
-      console.log('Owners received:', ownersResponse);
+      if (canAssign) {
+        console.log('Owners received:', ownersResponse);
+      }
 
       setParkingSpots(parkingResponse.data || []);
       setVehicleTypes(vehicleTypesResponse.data || []);
-      setOwners(ownersResponse || []);
+      setOwners(canAssign ? ownersResponse || [] : []);
     } catch (err) {
       console.error('Error loading data:', err);
       setError('Error al cargar los datos');
     } finally {
       setLoading(false);
     }
-  };
+  }, [canAssign]);
+
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
 
   const handleCreate = () => {
+    if (!canCreate) return;
     setEditingParking(null);
     setModalMode('create');
     setShowModal(true);
   };
 
   const handleEdit = (parking) => {
+    if (!canEdit) return;
     setEditingParking(parking);
     setModalMode('edit');
     setShowModal(true);
@@ -169,6 +181,7 @@ const Parking = () => {
   };
 
   const handleDelete = async (parking) => {
+    if (!canDelete) return;
     if (window.confirm('¿Está seguro de que desea eliminar este parqueadero?')) {
       try {
         await parkingAPI.delete(parking.Parking_id);
@@ -183,8 +196,10 @@ const Parking = () => {
   const handleModalSubmit = async (data) => {
     try {
       if (modalMode === 'create') {
+        if (!canCreate) return;
         await parkingAPI.create(data);
       } else if (modalMode === 'edit') {
+        if (!canEdit) return;
         await parkingAPI.update(editingParking.Parking_id, data);
       }
       setShowModal(false);
@@ -211,6 +226,7 @@ const Parking = () => {
   };
 
   const handleStatusToggle = async (parking) => {
+    if (!canEdit) return;
     try {
       // Toggle between Available and Occupied (English names from database)
       const newStatusId = parking.Parking_status_name === 'Available' ? 2 : 1; // 1 = Available, 2 = Occupied
@@ -232,11 +248,13 @@ const Parking = () => {
   };
 
   const handleAssign = (parking) => {
+    if (!canAssign) return;
     setAssigningParking(parking);
     setShowAssignModal(true);
   };
 
   const handleAssignSubmit = async (ownerId) => {
+    if (!canAssign) return;
     try {
       // Find the owner to get their User_FK_ID
       const selectedOwner = owners.find(owner => owner.Owner_id === parseInt(ownerId));
@@ -265,6 +283,7 @@ const Parking = () => {
   };
 
   const handleUnassign = async (parking) => {
+    if (!canAssign) return;
     if (window.confirm('¿Está seguro de que desea desasignar este parqueadero?')) {
       try {
         const updateData = {
@@ -376,9 +395,11 @@ const Parking = () => {
           <h1>Gestión de Parqueaderos</h1>
           <p className="text-muted">Administre los espacios de estacionamiento del conjunto residencial</p>
         </div>
-        <button className="btn btn-primary" onClick={handleCreate}>
-          <i className="bi bi-plus-lg"></i> Nuevo Parqueadero
-        </button>
+        {canCreate && (
+          <button className="btn btn-outline-primary" onClick={handleCreate}>
+            <i className="bi bi-plus-lg"></i> Nuevo Parqueadero
+          </button>
+        )}
       </div>
 
       <div className="filters-section">
@@ -437,7 +458,7 @@ const Parking = () => {
                 ? 'No se encontraron parqueaderos con los filtros aplicados'
                 : 'Aún no hay parqueaderos registrados'}
             </p>
-            {!searchTerm && statusFilter === 'all' && typeFilter === 'all' && (
+            {!searchTerm && statusFilter === 'all' && typeFilter === 'all' && canCreate && (
               <button className="btn btn-primary" onClick={handleCreate}>
                 <i className="bi bi-plus-lg"></i> Crear primer parqueadero
               </button>

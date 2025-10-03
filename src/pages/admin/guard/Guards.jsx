@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "react-query";
 import { guardsAPI } from "../../../services/api";
 import toast from "react-hot-toast";
@@ -204,7 +204,7 @@ const Guards = () => {
           <p>Administre el personal de seguridad del conjunto</p>
         </div>
         <button
-          className="btn btn-primary"
+          className="btn btn-outline-primary"
           onClick={handleCreate}
           disabled={isLoading}
         >

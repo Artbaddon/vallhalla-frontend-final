@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useQuery } from "react-query";
 import { ownersAPI } from "../../../services/api";
 
@@ -10,8 +10,8 @@ const PetModal = ({ show, onHide, onSubmit, pet, isLoading }) => {
     breed: "",
     owner_id: "",
     // para archivos almacenamos los objetos File o FileList
-    vaccination_card: null,
-    photos: [],
+  vaccination_card: null,
+  photos: null,
   });
 
   // Fetch owners for dropdown
@@ -20,22 +20,16 @@ const PetModal = ({ show, onHide, onSubmit, pet, isLoading }) => {
     onError: (err) => console.error("Error fetching owners:", err),
   });
 
-  // Transformar datos después de recibirlos
-  const owners = Array.isArray(ownersResponse)
-    ? ownersResponse.map((owner) => ({
-        id: owner.Owner_id,
-        userid: owner.User_FK_ID,
-        name: owner.Profile_fullName,
-      }))
-    : [];
+  const owners = useMemo(() => {
+    if (!Array.isArray(ownersResponse)) return [];
 
-  // Reset form when modal opens/closes or when editing a different pet
-  useEffect(() => {
-    if (ownersResponse) {
-      console.log("Respuesta completa de owners:", ownersResponse);
-      console.log("Datos transformados:", owners);
-    }
+    return ownersResponse.map((owner) => ({
+      id: owner.Owner_id,
+      userid: owner.User_FK_ID,
+      name: owner.Profile_fullName,
+    }));
   }, [ownersResponse]);
+  // Reset form when modal opens/closes or when editing a different pet
   useEffect(() => {
     if (!show) return;
 
@@ -45,20 +39,23 @@ const PetModal = ({ show, onHide, onSubmit, pet, isLoading }) => {
         species: pet.species || "",
         breed: pet.breed || "",
         owner_id: pet.owner_id?.toString() || "",
-        vaccination_card: pet.vaccination_card || "",
-        photos: pet.photos || "",
+        vaccination_card: pet.vaccination_card || null,
+        photos: pet.photos || null,
       });
-    } else if (owners.length > 0) {
+      return;
+    }
+
+    if (owners.length > 0) {
       setFormData({
         name: "",
         species: "",
         breed: "",
-        owner_id: owners[0].id.toString(),
-        vaccination_card: "",
-        photos: "",
+        owner_id: owners[0].id?.toString() || "",
+        vaccination_card: null,
+        photos: null,
       });
     }
-  }, [show, pet?.id, owners.length]);
+  }, [show, pet, owners]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;

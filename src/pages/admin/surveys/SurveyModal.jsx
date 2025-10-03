@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import './SurveyModal.css';
 
 const SurveyModal = ({ show, mode, survey, onClose, onSubmit }) => {
@@ -177,11 +177,11 @@ const SurveyModal = ({ show, mode, survey, onClose, onSubmit }) => {
     return typeMap[questionType] || 1;
   };
 
-  const handleClose = () => {
+  const handleClose = useCallback(() => {
     if (!loading) {
       onClose();
     }
-  };
+  }, [loading, onClose]);
 
   const handleBackdropClick = (e) => {
     if (e.target === e.currentTarget) {
@@ -189,11 +189,11 @@ const SurveyModal = ({ show, mode, survey, onClose, onSubmit }) => {
     }
   };
 
-  const handleEscapeKey = (e) => {
+  const handleEscapeKey = useCallback((e) => {
     if (e.key === 'Escape') {
       handleClose();
     }
-  };
+  }, [handleClose]);
 
   useEffect(() => {
     if (show) {
@@ -207,7 +207,7 @@ const SurveyModal = ({ show, mode, survey, onClose, onSubmit }) => {
       document.removeEventListener('keydown', handleEscapeKey);
       document.body.style.overflow = 'unset';
     };
-  }, [show]);
+  }, [handleEscapeKey, show]);
 
   if (!show) return null;
 
@@ -218,37 +218,6 @@ const SurveyModal = ({ show, mode, survey, onClose, onSubmit }) => {
       case 'view': return 'Detalles de la Encuesta';
       default: return 'Encuesta';
     }
-  };
-
-  const formatDate = (dateString) => {
-    if (!dateString) return 'No especificada';
-    try {
-      return new Date(dateString).toLocaleDateString('es-ES', {
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric'
-      });
-    } catch (error) {
-      return 'Fecha inválida';
-    }
-  };
-
-  const getStatusBadge = (status) => {
-    const statusConfig = {
-      'active': { class: 'success', icon: 'check-circle', text: 'Activa' },
-      'inactive': { class: 'secondary', icon: 'pause-circle', text: 'Inactiva' },
-      'draft': { class: 'warning', icon: 'edit', text: 'Borrador' },
-      'closed': { class: 'danger', icon: 'x-circle', text: 'Finalizada' }
-    };
-    
-    const config = statusConfig[status] || { class: 'secondary', icon: 'question-circle', text: status };
-    
-    return (
-      <span className={`badge bg-${config.class}`}>
-        <i className={`bi bi-${config.icon} me-1`}></i>
-        {config.text}
-      </span>
-    );
   };
 
   return (

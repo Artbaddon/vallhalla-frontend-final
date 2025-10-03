@@ -153,19 +153,13 @@ const Surveys = () => {
         <h1>Gestión de Encuestas</h1>
         <div className="header-actions">
           <button 
-            className="btn btn-success me-2" 
+            className="btn btn-outline-primary me-2" 
             onClick={handleCreate}
           >
             <i className="bi bi-plus-lg me-1"></i>
             Crear encuesta
           </button>
-          <button 
-            className="btn btn-primary" 
-            onClick={handleDownloadReport}
-          >
-            <i className="bi bi-download me-1"></i>
-            Descargar reporte de encuestas
-          </button>
+       
         </div>
       </div>
 
